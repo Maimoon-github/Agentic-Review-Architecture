@@ -29,7 +29,8 @@ CritiqueSnapshot).  Every task is idempotent and fully restartable.
 
 import json
 import logging
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 from typing import Type
 from pydantic import BaseModel, ValidationError
 from celery import shared_task, group, chord
@@ -51,7 +52,7 @@ def _get_models():
     return PipelineRun, AgentLog, CritiqueSnapshot
 
 
-MODEL = "gemini-1.5-pro"
+MODEL = "gemini-2.0-flash"
 MAX_TOKENS = 2000
 
 
@@ -60,39 +61,55 @@ MAX_TOKENS = 2000
 
 def _call_agent(system_prompt: str, user_prompt: str, schema: Type[BaseModel]) -> dict:
     """
-    Call Gemini in JSON mode and validate against a Pydantic schema.
+    Call Gemini in JSON mode and validate against a Pydantic schema using the new google-genai SDK.
     """
-    genai.configure(api_key=settings.GEMINI_API_KEY)
+    client = genai.Client(api_key=settings.GEMINI_API_KEY)
     
-    model = genai.GenerativeModel(
-        model_name=MODEL,
-        system_instruction=system_prompt
-    )
-    
-    response = model.generate_content(
-        user_prompt,
-        generation_config=genai.types.GenerationConfig(
-            response_mime_type="application/json",
-            max_output_tokens=MAX_TOKENS,
-            temperature=0.2,
-        )
-    )
-    
-    text = response.text.strip()
     try:
-        data = json.loads(text)
-        return schema.model_validate(data).model_dump()
-    except (json.JSONDecodeError, ValidationError) as e:
-        logger.error(f"Agent validation failed. Raw: {text} | Error: {e}")
-        # Retry once with explicit json hint
-        retry_prompt = f"{user_prompt}\n\nIMPORTANT: Respond ONLY in valid JSON matching this schema: {schema.model_json_schema()}"
-        response2 = model.generate_content(
-            retry_prompt,
-            generation_config=genai.types.GenerationConfig(
+        response = client.models.generate_content(
+            model=MODEL,
+            contents=user_prompt,
+            config=types.GenerateContentConfig(
+                system_instruction=system_prompt,
                 response_mime_type="application/json",
                 max_output_tokens=MAX_TOKENS,
+                temperature=0.2,
+                response_schema=schema,
             )
         )
+        
+        if response.parsed:
+            # If the SDK successfully parsed the response into our Pydantic model
+            if isinstance(response.parsed, schema):
+                return response.parsed.model_dump()
+            return schema.model_validate(response.parsed).model_dump()
+            
+        # Fallback to manual parsing if .parsed is empty
+        text = response.text.strip()
+        data = json.loads(text)
+        return schema.model_validate(data).model_dump()
+
+    except (json.JSONDecodeError, ValidationError, Exception) as e:
+        logger.error(f"Agent validation failed or SDK error: {e}")
+        # Retry once with explicit schema hint
+        retry_prompt = f"{user_prompt}\n\nIMPORTANT: Respond ONLY in valid JSON matching this schema: {schema.model_json_schema()}"
+        
+        response2 = client.models.generate_content(
+            model=MODEL,
+            contents=retry_prompt,
+            config=types.GenerateContentConfig(
+                system_instruction=system_prompt,
+                response_mime_type="application/json",
+                max_output_tokens=MAX_TOKENS,
+                response_schema=schema,
+            )
+        )
+        
+        if response2.parsed:
+             if isinstance(response2.parsed, schema):
+                 return response2.parsed.model_dump()
+             return schema.model_validate(response2.parsed).model_dump()
+
         data2 = json.loads(response2.text.strip())
         return schema.model_validate(data2).model_dump()
 

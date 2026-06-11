@@ -12,6 +12,7 @@ import logging
 from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
+from rest_framework.permissions import AllowAny
 from django.shortcuts import get_object_or_404
 
 from agentic_review.orchestration.models import PipelineRun, AgentLog
@@ -72,6 +73,7 @@ class PipelineStatusView(APIView):
     Returns the current PipelineRun state plus the latest AgentLog per agent.
     Intended for polling until status reaches DONE / FAILED / MAX_ITER.
     """
+    permission_classes = [AllowAny]
 
     def get(self, request, pk):
         pipeline = get_object_or_404(PipelineRun, id=pk)
@@ -86,6 +88,7 @@ class PipelineLogsView(APIView):
     Returns all AgentLog entries for this pipeline, ordered chronologically.
     Optional query param `agent_name` filters by a specific agent.
     """
+    permission_classes = [AllowAny]
 
     def get(self, request, pk):
         pipeline = get_object_or_404(PipelineRun, id=pk)
@@ -106,6 +109,7 @@ class PipelineOutputView(APIView):
     Returns the final polished output once the pipeline has status=DONE.
     Returns 404 if the pipeline has not completed successfully yet.
     """
+    permission_classes = [AllowAny]
 
     def get(self, request, pk):
         pipeline = get_object_or_404(PipelineRun, id=pk)

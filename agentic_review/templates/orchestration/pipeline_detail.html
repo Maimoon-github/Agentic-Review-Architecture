@@ -1,5 +1,6 @@
 {% extends "orchestration/base.html" %}
-{% block title %}Orchestration Hud #{{ pipeline.id|stringformat:"s"|truncatechars:9 }} — AgentFlow{% endblock %}
+{% load static %}
+{% block title %}Orchestration Hud #{{pipeline.id|stringformat:"s"|truncatechars:9}} — AgentFlow{% endblock %}
 
 {% block extra_head %}
 <style>
@@ -212,24 +213,23 @@
         style="display: flex; justify-content: space-between; align-items: flex-start; gap: 2rem; margin-bottom: 1rem;">
         <div style="min-width: 0;">
             <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 1rem;">
-                <span class="badge badge-{{ pipeline.status }}" id="status-badge">{{ pipeline.status }}</span>
+                <span class="badge badge-{{pipeline.status}}" id="status-badge">{{pipeline.status}}</span>
                 <span class="indicator-live" id="live-indicator">
                     <span class="animate-pulse"
                         style="width: 8px; height: 8px; background: currentColor; border-radius: 50%;"></span>
                     Live HUD Data
                 </span>
-                <span style="font-family: var(--font-mono); font-size: 0.75rem; color: var(--text-dim);">UUID: {{
-                    pipeline.id }}</span>
+                <span style="font-family: var(--font-mono); font-size: 0.75rem; color: var(--text-dim);">UUID: {{pipeline.id}}</span>
             </div>
-            <h1 class="hud-title">{{ pipeline.task_description }}</h1>
+            <h1 class="hud-title">{{pipeline.task_description}}</h1>
         </div>
         <div style="text-align: right;">
             <div
                 style="font-size: 0.75rem; font-weight: 700; color: var(--text-dim); text-transform: uppercase; margin-bottom: 0.5rem;">
                 Iteration Sequence</div>
             <div style="font-size: 2rem; font-weight: 800; font-family: var(--font-display);">
-                <span id="cur-iter">{{ pipeline.iteration_count }}</span><span
-                    style="color: var(--text-dim); font-size: 1.25rem;">/{{ pipeline.max_iterations }}</span>
+                <span id="cur-iter">{{pipeline.iteration_count}}</span><span
+                    style="color: var(--text-dim); font-size: 1.25rem;">/{{pipeline.max_iterations}}</span>
             </div>
         </div>
     </div>
@@ -314,10 +314,9 @@
                     <div class="log-entry">
                         <div class="log-entry-header" onclick="toggleLog(this)">
                             <div style="display: flex; align-items: center; gap: 12px;">
-                                <span class="badge badge-{{ log.status }}">{{ log.status }}</span>
-                                <span style="font-weight: 700; color: #fff;">{{ log.agent_name }}</span>
-                                <span style="font-size: 0.75rem; color: var(--text-dim);">Iter {{ log.iteration
-                                    }}</span>
+                                <span class="badge badge-{{log.status}}">{{log.status}}</span>
+                                <span style="font-weight: 700; color: #fff;">{{log.agent_name}}</span>
+                                <span style="font-size: 0.75rem; color: var(--text-dim);">Iter {{log.iteration}}</span>
                             </div>
                             <span style="color: var(--text-dim); transition: transform 0.2s;">
                                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -331,15 +330,13 @@
                                 <div
                                     style="color: var(--accent); font-weight: 700; margin-bottom: 0.5rem; text-transform: uppercase; font-size: 0.65rem;">
                                     Neural Input</div>
-                                <div style="color: var(--text-main); font-family: var(--font-mono);">{{ log.input_text
-                                    }}</div>
+                                <div style="color: var(--text-main); font-family: var(--font-mono);">{{log.input_text}}</div>
                             </div>
                             <div>
                                 <div
                                     style="color: var(--accent-emerald); font-weight: 700; margin-bottom: 0.5rem; text-transform: uppercase; font-size: 0.65rem;">
                                     System Output</div>
-                                <div style="color: var(--text-main); font-family: var(--font-mono);">{{ log.output_text
-                                    }}</div>
+                                <div style="color: var(--text-main); font-family: var(--font-mono);">{{log.output_text}}</div>
                             </div>
                         </div>
                     </div>
@@ -364,23 +361,20 @@
                         <div
                             style="color: var(--accent-violet); font-weight: 800; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 1rem;">
                             Structural Constraint</div>
-                        <div style="font-size: 0.9rem; line-height: 1.7; color: var(--text-main);">{{
-                            latest_critique.planner_critique|default:"Analysis pending..." }}</div>
+                        <div style="font-size: 0.9rem; line-height: 1.7; color: var(--text-main);">{{latest_critique.planner_critique|default:"Analysis pending..."}}</div>
                     </div>
                     <div class="glass-card">
                         <div
                             style="color: var(--accent); font-weight: 800; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 1rem;">
                             Logical Validation</div>
-                        <div style="font-size: 0.9rem; line-height: 1.7; color: var(--text-main);">{{
-                            latest_critique.reasoner_critique|default:"Analysis pending..." }}</div>
+                        <div style="font-size: 0.9rem; line-height: 1.7; color: var(--text-main);">{{latest_critique.reasoner_critique|default:"Analysis pending..."}}</div>
                     </div>
                 </div>
                 <div class="glass-card">
                     <div
                         style="color: var(--accent-emerald); font-weight: 800; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 1rem;">
                         Consolidated Synthesis Checklist</div>
-                    <div style="font-size: 1rem; line-height: 1.8; color: #fff;">{{
-                        latest_critique.merged_critique|default:"Synthesis in progress..." }}</div>
+                    <div style="font-size: 1rem; line-height: 1.8; color: #fff;">{{latest_critique.merged_critique|default:"Synthesis in progress..."}}</div>
                 </div>
                 {% else %}
                 <div style="text-align: center; padding: 4rem 2rem; color: var(--text-dim);">
@@ -407,7 +401,7 @@
                     </div>
                     <div id="final-output-payload"
                         style="padding: 2rem; font-family: var(--font-sans); line-height: 1.8; max-height: 600px; overflow-y: auto; color: #fff; white-space: pre-wrap;">
-                        {% if pipeline.status == 'DONE' %}{{ pipeline.final_output }}{% else %}<div
+                        {% if pipeline.status == 'DONE' %}{{pipeline.final_output}}{% else %}<div
                             style="color: var(--text-dim); text-align: center; padding: 4rem 0;">Awaiting mission
                             completion to unlock deliverable.</div>{% endif %}
                     </div>
@@ -419,8 +413,10 @@
 </div>
 {% endblock %}
 
-<div id="pipeline-config" data-id="{{ pipeline.id }}"
-    data-is-terminal="{{ pipeline.is_terminal|lower|default:'false' }}"
-    data-initial-logs='[{% for log in logs %}{"agent_name": "{{ log.agent_name }}", "status": "{{ log.status }}"}{% if not forloop.last %},{% endif %}{% endfor %}]'>
+{% block extra_scripts %}
+<div id="pipeline-config" data-id="{{pipeline.id}}"
+    data-is-terminal="{{pipeline.is_terminal|lower|default:'false'}}"
+    data-initial-logs='[{% for log in logs %}{"agent_name": "{{log.agent_name}}", "status": "{{log.status}}"}{% if not forloop.last %},{% endif %}{% endfor %}]'>
 </div>
 <script src="{% static 'orchestration/js/hud.js' %}"></script>
+{% endblock %}

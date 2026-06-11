@@ -1,4 +1,5 @@
 {% extends "orchestration/base.html" %}
+{% load static %}
 {% block title %}Dashboard — AgentFlow{% endblock %}
 {% block nav_dashboard %}active{% endblock %}
 
@@ -30,8 +31,7 @@
                     </svg>
                 </div>
             </div>
-            <div style="font-size: 2rem; font-weight: 700; font-family: var(--font-display);">{{
-                pipelines.paginator.count }}</div>
+            <div style="font-size: 2rem; font-weight: 700; font-family: var(--font-display);">{{pipelines.paginator.count}}</div>
         </div>
 
         <div class="glass-card" style="padding: 1.5rem;">
@@ -47,7 +47,7 @@
                 </div>
             </div>
             <div style="font-size: 2rem; font-weight: 700; font-family: var(--font-display);">
-                {{ active_count|default:"0" }}
+                {{active_count|default:"0"}}
             </div>
         </div>
 
@@ -99,13 +99,12 @@
 
                     <div style="min-width: 0;">
                         <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
-                            <span class="badge badge-{{ pipeline.status }}">{{ pipeline.status }}</span>
-                            <span style="font-family: var(--font-mono); font-size: 0.7rem; color: var(--text-dim);">#{{
-                                pipeline.id|stringformat:"s"|truncatechars:12 }}</span>
+                            <span class="badge badge-{{pipeline.status}}">{{pipeline.status}}</span>
+                            <span style="font-family: var(--font-mono); font-size: 0.7rem; color: var(--text-dim);">#{{pipeline.id|stringformat:"s"|truncatechars:12}}</span>
                         </div>
                         <h4
                             style="font-size: 1rem; color: #fff; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 600;">
-                            {{ pipeline.task_description }}
+                            {{pipeline.task_description}}
                         </h4>
                         <div
                             style="font-size: 0.75rem; color: var(--text-dim); display: flex; align-items: center; gap: 6px;">
@@ -114,14 +113,14 @@
                                 <circle cx="12" cy="12" r="10"></circle>
                                 <polyline points="12 6 12 12 16 14"></polyline>
                             </svg>
-                            Started {{ pipeline.created_at|timesince }} ago
+                            Started {{pipeline.created_at|timesince}} ago
                         </div>
                     </div>
 
                     <div style="text-align: right; min-width: 100px;">
                         <div
                             style="font-size: 1.2rem; font-weight: 700; color: #fff; font-family: var(--font-display);">
-                            {{ pipeline.iteration_count }}</div>
+                            {{pipeline.iteration_count}}</div>
                         <div
                             style="font-size: 0.65rem; color: var(--text-dim); text-transform: uppercase; font-weight: 600; letter-spacing: 0.05em;">
                             Iterations</div>
@@ -162,18 +161,17 @@
     {% if is_paginated %}
     <div style="display: flex; justify-content: center; align-items: center; gap: 1rem; margin-top: 2rem;">
         {% if page_obj.has_previous %}
-        <a href="?page={{ page_obj.previous_page_number }}" class="btn btn-secondary" style="padding: 8px 16px;">
+        <a href="?page={{page_obj.previous_page_number}}" class="btn btn-secondary" style="padding: 8px 16px;">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <polyline points="15 18 9 12 15 6"></polyline>
             </svg>
         </a>
         {% endif %}
         <span style="font-size: 0.85rem; color: var(--text-muted);">
-            Page <span style="color: #fff; font-weight: 600;">{{ page_obj.number }}</span> of {{
-            page_obj.paginator.num_pages }}
+            Page <span style="color: #fff; font-weight: 600;">{{page_obj.number}}</span> of {{page_obj.paginator.num_pages}}
         </span>
         {% if page_obj.has_next %}
-        <a href="?page={{ page_obj.next_page_number }}" class="btn btn-secondary" style="padding: 8px 16px;">
+        <a href="?page={{page_obj.next_page_number}}" class="btn btn-secondary" style="padding: 8px 16px;">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <polyline points="9 18 15 12 9 6"></polyline>
             </svg>

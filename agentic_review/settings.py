@@ -43,7 +43,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'django_structlog.middleware.RequestMiddleware',
+    'django_structlog.middlewares.RequestMiddleware',
 ]
 
 
@@ -129,6 +129,8 @@ CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TASK_TRACK_STARTED = True
 CELERY_TASK_TIME_LIMIT = 600  # 10 minutes per task
+CELERY_TASK_ALWAYS_EAGER = True
+CELERY_TASK_EAGER_PROPAGATES = True
 
 # ─── Agent Configuration ──────────────────────────────────────────────────────
 GEMINI_API_KEY = config('GEMINI_API_KEY', default='')

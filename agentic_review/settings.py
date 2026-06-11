@@ -97,7 +97,7 @@ CELERY_TASK_TRACK_STARTED = True
 CELERY_TASK_TIME_LIMIT = 600  # 10 minutes per task
 
 # ─── Agent Configuration ──────────────────────────────────────────────────────
-ANTHROPIC_API_KEY = config('ANTHROPIC_API_KEY', default='')
+GEMINI_API_KEY = config('GEMINI_API_KEY', default='')
 AGENT_MAX_ITERATIONS = config('AGENT_MAX_ITERATIONS', default=7, cast=int)
 
 # ─── Logging ──────────────────────────────────────────────────────────────────

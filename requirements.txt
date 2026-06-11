@@ -1,7 +1,46 @@
-django>=5.2
-djangorestframework>=3.17
-celery>=5.6
-redis>=5.0
-django-celery-results>=2.6
-anthropic>=0.109
-python-decouple>=3.8
+
+# ──────────────────────────────────────────
+# Django Multi-Agent Orchestration System
+# Requirements
+# ──────────────────────────────────────────
+
+# Core Framework
+Django>=4.2,<5.0
+djangorestframework>=3.15,<4.0
+
+# Async Task Queue
+celery>=5.3,<6.0
+redis>=5.0,<6.0
+django-celery-results>=2.5,<3.0
+django-celery-beat>=2.6,<3.0        # Optional: scheduled pipeline triggers
+
+# LLM Client
+google-generativeai>=0.8.0
+
+# Environment & Configuration
+python-decouple>=3.8,<4.0
+
+# Database
+psycopg2-binary>=2.9,<3.0           # PostgreSQL (swap for mysqlclient if using MySQL)
+
+# API Utilities
+djangorestframework-simplejwt>=5.3,<6.0   # JWT auth for API endpoints
+django-filter>=24.0,<25.0                 # Filtering on /logs/ endpoint
+drf-spectacular>=0.27,<1.0               # OpenAPI schema + Swagger UI
+
+# Validation & Serialization
+pydantic>=2.7,<3.0                        # JSON output validation from LLM responses
+
+# Logging & Monitoring
+django-structlog>=8.0,<9.0               # Structured logging for agent events
+sentry-sdk>=2.0,<3.0                     # Error tracking (optional but recommended)
+
+# Dev & Testing
+pytest>=8.0,<9.0
+pytest-django>=4.8,<5.0
+pytest-celery>=1.0,<2.0
+factory-boy>=3.3,<4.0                    # Model factories for test fixtures
+coverage>=7.5,<8.0
+
+# Code Quality
+ruff>=0.4,<1.0                           # Linter + formatter

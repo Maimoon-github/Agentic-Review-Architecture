@@ -30,7 +30,7 @@ CritiqueSnapshot).  Every task is idempotent and fully restartable.
 import json
 import logging
 from celery import shared_task, group, chord
-import anthropic
+import google.generativeai as genai
 from django.conf import settings
 
 logger = logging.getLogger('orchestration')
@@ -44,26 +44,27 @@ def _get_models():
     return PipelineRun, AgentLog, CritiqueSnapshot
 
 
-def _anthropic_client():
-    return anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
-
-
-MODEL = "claude-sonnet-4-20250514"
+MODEL = "gemini-1.5-pro"
 MAX_TOKENS = 2000
+
 
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 
 def _call_llm(system_prompt: str, user_prompt: str) -> str:
-    """Call the Anthropic Messages API and return the text response."""
-    client = _anthropic_client()
-    response = client.messages.create(
-        model=MODEL,
-        max_tokens=MAX_TOKENS,
-        system=system_prompt,
-        messages=[{"role": "user", "content": user_prompt}],
+    """Call the Google Gemini API and return the text response."""
+    genai.configure(api_key=settings.GEMINI_API_KEY)
+    model = genai.GenerativeModel(
+        model_name=MODEL,
+        system_instruction=system_prompt
     )
-    return response.content[0].text
+    response = model.generate_content(
+        user_prompt,
+        generation_config=genai.types.GenerationConfig(
+            max_output_tokens=MAX_TOKENS,
+        )
+    )
+    return response.text
 
 
 def _call_llm_json(system_prompt: str, user_prompt: str, retry_on_error: bool = True) -> dict:

@@ -1,6 +1,6 @@
 # AgentFlow — Multi-Agent Orchestration System
 
-A production-ready Django + Celery + Anthropic multi-agent pipeline that
+A production-ready Django + Celery + Google Gemini multi-agent pipeline that
 collaboratively plans, writes, edits, and quality-reviews content through
 iterative critique-refinement loops.
 
@@ -12,27 +12,34 @@ iterative critique-refinement loops.
 POST /api/pipeline/start/
         │
         ▼
-  Orchestrator  ──── chord(group) ────►  Planner  ──┐
-                                      ►  Reasoner ──┤
-                                                     ▼
-                                             Final Critique
-                                             (merge + checklist)
-                                                     │
-                                                  Writer
-                                                     │
-                                                  Editor  ← 3-pass refine
-                                                  (absorbed into Writer log)
-                                                     │
-                                                 Reviewer
-                                              ┌────┴────┐
-                                            MATCH    MISMATCH
-                                              │          │
-                                           status=   iteration++
-                                            DONE    ┌───┴───────────────┐
-                                                  cap?          re-chord()
-                                                    │         (structural → Planner,
-                                              status=         logical → Reasoner,
-                                             MAX_ITER         or both)
+   Orchestrator
+        │
+        ▼
+     Planner  ◄───────────►  Reasoner
+        │      (sub-loop)       │
+        └───────────┬───────────┘
+                    ▼
+              Final Critique
+            (merge + checklist)
+                    │
+              ┌─────┴─────┐
+              │  Writer   │ ◄───┐
+              └─────┬─────┘     │ (rewrite/refine)
+                    ▼           │
+              ┌───────────┐     │
+              │  Editor   │ ────┘
+              └─────┬─────┘
+                    ▼
+                Reviewer
+             ┌──────┴──────┐
+           MATCH        MISMATCH
+             │             │
+          status=      iteration++
+           DONE     ┌──────┴──────────┐
+                  cap?           re-plan
+                    │        (Planner/Reasoner)
+              status=MAX_ITER
+
 ```
 
 ### Agent responsibilities
@@ -91,7 +98,7 @@ requirements.txt
 
 - Python 3.11+ (tested with conda env `ara`)
 - Redis (broker + result backend transport)
-- Anthropic API key
+- Google Gemini API key (e.g., for `gemini-1.5-pro`)
 
 ### 1 — Clone & environment
 
@@ -116,7 +123,7 @@ Edit `.env`:
 SECRET_KEY=your-very-secret-key
 DEBUG=True
 ALLOWED_HOSTS=localhost,127.0.0.1
-ANTHROPIC_API_KEY=sk-ant-...        # required
+GEMINI_API_KEY=AIzaSy...           # required
 REDIS_URL=redis://localhost:6379/0  # default
 ```
 

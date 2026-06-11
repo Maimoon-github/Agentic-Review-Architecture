@@ -1,0 +1,198 @@
+/* ── HUD Layout ─────────────────────────────────────────── */
+.hud-grid {
+    display: grid;
+    grid-template-columns: 320px 1fr;
+    gap: 2rem;
+    align-items: start;
+}
+
+/* ── Agent Status Grid ───────────────────────────────────── */
+.agent-status-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.agent-node {
+    background: var(--bg-800);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-md);
+    padding: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    position: relative;
+    overflow: hidden;
+}
+
+.agent-node.active {
+    border-color: var(--accent);
+    background: rgba(59, 130, 246, 0.05);
+    box-shadow: var(--shadow-glow);
+}
+
+.agent-node.done {
+    border-color: rgba(16, 185, 129, 0.3);
+}
+
+.agent-node.failed {
+    border-color: rgba(239, 68, 68, 0.3);
+}
+
+.agent-node-icon {
+    width: 40px;
+    height: 40px;
+    background: var(--bg-700);
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.25rem;
+    flex-shrink: 0;
+    transition: transform 0.3s;
+}
+
+.agent-node.active .agent-node-icon {
+    transform: scale(1.1);
+    background: var(--accent-gradient);
+}
+
+.agent-node-meta {
+    flex: 1;
+    min-width: 0;
+}
+
+.agent-node-name {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 0.85rem;
+    color: var(--text-main);
+    margin-bottom: 2px;
+}
+
+.agent-node-status {
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+/* ── Tabs & Content ──────────────────────────────────────── */
+.control-center {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.tab-header {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.tab-btn {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 0.95rem;
+    font-weight: 600;
+    padding-bottom: 0.5rem;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: all 0.2s;
+}
+
+.tab-btn:hover {
+    color: #fff;
+}
+
+.tab-btn.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+}
+
+.tab-content {
+    display: none;
+}
+
+.tab-content.active {
+    display: block;
+}
+
+/* ── Logs ────────────────────────────────────────────────── */
+.log-entry {
+    background: var(--bg-800);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-md);
+    margin-bottom: 1rem;
+    overflow: hidden;
+}
+
+.log-entry-header {
+    padding: 1rem 1.5rem;
+    background: var(--glass-highlight);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+}
+
+.log-entry-body {
+    padding: 1.5rem;
+    font-family: var(--font-mono);
+    font-size: 0.82rem;
+    color: var(--text-muted);
+    line-height: 1.7;
+    background: #000;
+    border-top: 1px solid var(--glass-border);
+    display: none;
+}
+
+/* ── HUD HUD Details ─────────────────────────────────────── */
+.hud-title {
+    font-size: 1.75rem;
+    font-weight: 800;
+    line-height: 1.3;
+    margin-bottom: 1.5rem;
+}
+
+.indicator-live {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--accent);
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    padding: 6px 12px;
+    background: rgba(59, 130, 246, 0.1);
+    border-radius: 6px;
+}
+
+/* ── Progress ──────────────────────────────────────────────── */
+.progress-hud {
+    background: var(--bg-700);
+    height: 6px;
+    border-radius: 3px;
+    overflow: hidden;
+    margin: 1.5rem 0 3rem;
+}
+
+.progress-hud-fill {
+    height: 100%;
+    background: var(--accent-gradient);
+    box-shadow: 0 0 10px var(--accent);
+    transition: width 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@media (max-width: 1024px) {
+    .hud-grid {
+        grid-template-columns: 1fr;
+    }
+}

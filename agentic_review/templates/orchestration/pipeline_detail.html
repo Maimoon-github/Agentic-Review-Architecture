@@ -1,559 +1,426 @@
 {% extends "orchestration/base.html" %}
-{% block title %}Pipeline {{ pipeline.id|stringformat:"s"|truncatechars:9 }} — AgentFlow{% endblock %}
+{% block title %}Orchestration Hud #{{ pipeline.id|stringformat:"s"|truncatechars:9 }} — AgentFlow{% endblock %}
 
 {% block extra_head %}
 <style>
-    /* ── Timeline ─────────────────────────────────────────────── */
-    .timeline {
+    /* ── HUD Layout ─────────────────────────────────────────── */
+    .hud-grid {
+        display: grid;
+        grid-template-columns: 320px 1fr;
+        gap: 2rem;
+        align-items: start;
+    }
+
+    /* ── Agent Status Grid ───────────────────────────────────── */
+    .agent-status-list {
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+    }
+
+    .agent-node {
+        background: var(--bg-800);
+        border: 1px solid var(--glass-border);
+        border-radius: var(--radius-md);
+        padding: 1rem;
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
         position: relative;
-        padding-left: 28px;
+        overflow: hidden;
     }
 
-    .timeline::before {
-        content: '';
-        position: absolute;
-        left: 8px;
-        top: 0;
-        bottom: 0;
-        width: 2px;
-        background: linear-gradient(to bottom, var(--accent-2), transparent);
-        border-radius: 2px;
+    .agent-node.active {
+        border-color: var(--accent);
+        background: rgba(59, 130, 246, 0.05);
+        box-shadow: var(--shadow-glow);
     }
 
-    .tl-item {
-        position: relative;
-        margin-bottom: 1.25rem;
+    .agent-node.done {
+        border-color: rgba(16, 185, 129, 0.3);
     }
 
-    .tl-dot {
-        position: absolute;
-        left: -24px;
-        top: 16px;
-        width: 14px;
-        height: 14px;
-        border-radius: 50%;
-        border: 2px solid var(--bg-800);
+    .agent-node.failed {
+        border-color: rgba(239, 68, 68, 0.3);
+    }
+
+    .agent-node-icon {
+        width: 40px;
+        height: 40px;
+        background: var(--bg-700);
+        border-radius: 10px;
         display: flex;
         align-items: center;
         justify-content: center;
-        font-size: 7px;
+        font-size: 1.25rem;
+        flex-shrink: 0;
+        transition: transform 0.3s;
+    }
+
+    .agent-node.active .agent-node-icon {
+        transform: scale(1.1);
+        background: var(--accent-gradient);
+    }
+
+    .agent-node-meta {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .agent-node-name {
+        font-family: var(--font-display);
         font-weight: 700;
-        z-index: 1;
+        font-size: 0.85rem;
+        color: var(--text-main);
+        margin-bottom: 2px;
     }
 
-    .tl-dot-SUCCESS {
-        background: var(--accent-3);
-    }
-
-    .tl-dot-FAILED {
-        background: var(--danger);
-    }
-
-    .tl-dot-SKIPPED {
-        background: var(--text-400);
-    }
-
-    /* ── Agent panel ──────────────────────────────────────────── */
-    .agent-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-        gap: .75rem;
-        margin-bottom: 1.5rem;
-    }
-
-    .agent-card {
-        background: var(--bg-700);
-        border: 1px solid var(--border);
-        border-radius: var(--radius-sm);
-        padding: .9rem;
-        transition: border-color .2s;
-    }
-
-    .agent-card.active {
-        border-color: rgba(99, 179, 237, .4);
-    }
-
-    .agent-card.done {
-        border-color: rgba(16, 185, 129, .25);
-    }
-
-    .agent-card.failed {
-        border-color: rgba(239, 68, 68, .25);
-    }
-
-    .agent-name {
-        font-size: .72rem;
-        font-weight: 700;
-        letter-spacing: .06em;
+    .agent-node-status {
+        font-size: 0.7rem;
+        font-weight: 600;
+        color: var(--text-dim);
         text-transform: uppercase;
-        color: var(--text-300);
-        margin-bottom: .3rem;
-    }
-
-    .agent-status {
-        font-size: .8rem;
-        color: var(--text-200);
-    }
-
-    .agent-icon {
-        font-size: 1.4rem;
-        margin-bottom: .4rem;
-    }
-
-    /* ── Raw output panel ────────────────────────────────────── */
-    .output-box {
-        background: var(--bg-900);
-        border: 1px solid var(--border);
-        border-radius: var(--radius-sm);
-        padding: 1.25rem;
-        font-family: var(--mono);
-        font-size: .8rem;
-        line-height: 1.7;
-        color: var(--text-200);
-        white-space: pre-wrap;
-        word-break: break-word;
-        max-height: 420px;
-        overflow-y: auto;
-    }
-
-    /* ── Tabs ─────────────────────────────────────────────────── */
-    .tabs {
+        letter-spacing: 0.05em;
         display: flex;
-        gap: 0;
-        border-bottom: 1px solid var(--border);
-        margin-bottom: 1.5rem;
+        align-items: center;
+        gap: 4px;
+    }
+
+    /* ── Tabs & Content ──────────────────────────────────────── */
+    .control-center {
+        display: flex;
+        flex-direction: column;
+        gap: 1.5rem;
+    }
+
+    .tab-header {
+        display: flex;
+        gap: 1rem;
+        margin-bottom: 1rem;
     }
 
     .tab-btn {
         background: none;
         border: none;
-        border-bottom: 2px solid transparent;
-        padding: .65rem 1.2rem;
-        color: var(--text-300);
-        font-size: .875rem;
-        font-weight: 500;
+        color: var(--text-muted);
+        font-size: 0.95rem;
+        font-weight: 600;
+        padding-bottom: 0.5rem;
         cursor: pointer;
-        margin-bottom: -1px;
-        transition: color .2s, border-color .2s;
+        border-bottom: 2px solid transparent;
+        transition: all 0.2s;
     }
 
     .tab-btn:hover {
-        color: var(--text-100);
+        color: #fff;
     }
 
     .tab-btn.active {
         color: var(--accent);
         border-bottom-color: var(--accent);
-        font-weight: 600;
     }
 
-    .tab-pane {
+    .tab-content {
         display: none;
     }
 
-    .tab-pane.active {
+    .tab-content.active {
         display: block;
     }
 
-    /* ── Progress bar ─────────────────────────────────────────── */
-    .progress-track {
-        height: 4px;
-        background: var(--bg-600);
-        border-radius: 2px;
-        overflow: hidden;
-        margin: .5rem 0;
-    }
-
-    .progress-fill {
-        height: 100%;
-        background: linear-gradient(90deg, var(--accent-2), var(--accent));
-        border-radius: 2px;
-        transition: width .5s ease;
-    }
-
-    /* ── Spinner ──────────────────────────────────────────────── */
-    @keyframes spin {
-        to {
-            transform: rotate(360deg);
-        }
-    }
-
-    .spinner {
-        display: inline-block;
-        width: 14px;
-        height: 14px;
-        border: 2px solid rgba(99, 179, 237, .2);
-        border-top-color: var(--accent);
-        border-radius: 50%;
-        animation: spin .8s linear infinite;
-        vertical-align: middle;
-    }
-
-    /* ── Log row ──────────────────────────────────────────────── */
-    .log-row {
-        border: 1px solid var(--border);
-        border-radius: var(--radius-sm);
-        background: var(--bg-700);
-        margin-bottom: .5rem;
+    /* ── Logs ────────────────────────────────────────────────── */
+    .log-entry {
+        background: var(--bg-800);
+        border: 1px solid var(--glass-border);
+        border-radius: var(--radius-md);
+        margin-bottom: 1rem;
         overflow: hidden;
     }
 
-    .log-header {
+    .log-entry-header {
+        padding: 1rem 1.5rem;
+        background: var(--glass-highlight);
         display: flex;
-        align-items: center;
         justify-content: space-between;
-        padding: .7rem 1rem;
+        align-items: center;
         cursor: pointer;
-        transition: background .2s;
     }
 
-    .log-header:hover {
-        background: var(--bg-600);
-    }
-
-    .log-body {
-        border-top: 1px solid var(--border);
-        font-size: .78rem;
-        font-family: var(--mono);
-        line-height: 1.65;
-        color: var(--text-200);
-        white-space: pre-wrap;
-        word-break: break-word;
-        padding: 1rem;
-        max-height: 320px;
-        overflow-y: auto;
+    .log-entry-body {
+        padding: 1.5rem;
+        font-family: var(--font-mono);
+        font-size: 0.82rem;
+        color: var(--text-muted);
+        line-height: 1.7;
+        background: #000;
+        border-top: 1px solid var(--glass-border);
         display: none;
+    }
+
+    /* ── HUD HUD Details ─────────────────────────────────────── */
+    .hud-title {
+        font-size: 1.75rem;
+        font-weight: 800;
+        line-height: 1.3;
+        margin-bottom: 1.5rem;
+    }
+
+    .indicator-live {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        color: var(--accent);
+        font-size: 0.75rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        padding: 6px 12px;
+        background: rgba(59, 130, 246, 0.1);
+        border-radius: 6px;
+    }
+
+    /* ── Progress ──────────────────────────────────────────────── */
+    .progress-hud {
+        background: var(--bg-700);
+        height: 6px;
+        border-radius: 3px;
+        overflow: hidden;
+        margin: 1.5rem 0 3rem;
+    }
+
+    .progress-hud-fill {
+        height: 100%;
+        background: var(--accent-gradient);
+        box-shadow: 0 0 10px var(--accent);
+        transition: width 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    @media (max-width: 1024px) {
+        .hud-grid {
+            grid-template-columns: 1fr;
+        }
     }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="animate-in">
+<div class="animate-fade-in">
 
-    <!-- Back link -->
-    <a href="{% url 'dashboard' %}"
-        style="display:inline-flex;align-items:center;gap:.4rem;font-size:.85rem;color:var(--text-300);margin-bottom:1.5rem;text-decoration:none;">
-        ← Dashboard
-    </a>
-
-    <!-- Pipeline header -->
+    <!-- Top HUD Bar -->
     <div
-        style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:1rem;margin-bottom:2rem;">
-        <div>
-            <div style="display:flex;align-items:center;gap:.75rem;margin-bottom:.5rem;">
+        style="display: flex; justify-content: space-between; align-items: flex-start; gap: 2rem; margin-bottom: 1rem;">
+        <div style="min-width: 0;">
+            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 1rem;">
                 <span class="badge badge-{{ pipeline.status }}" id="status-badge">{{ pipeline.status }}</span>
-                <span style="font-size:.75rem;color:var(--text-400);font-family:var(--mono);" id="pipeline-id">
-                    {{ pipeline.id }}
+                <span class="indicator-live" id="live-indicator">
+                    <span class="animate-pulse"
+                        style="width: 8px; height: 8px; background: currentColor; border-radius: 50%;"></span>
+                    Live HUD Data
                 </span>
+                <span style="font-family: var(--font-mono); font-size: 0.75rem; color: var(--text-dim);">UUID: {{
+                    pipeline.id }}</span>
             </div>
-            <h1 style="font-size:1.4rem;font-weight:700;color:var(--text-100);max-width:750px;line-height:1.4;">
-                {{ pipeline.task_description|truncatechars:120 }}
-            </h1>
-            <p style="font-size:.8rem;color:var(--text-400);margin-top:.3rem;">
-                Started {{ pipeline.created_at|timesince }} ago &middot;
-                Iteration <span id="iter-count">{{ pipeline.iteration_count }}</span> / {{ pipeline.max_iterations }}
-            </p>
+            <h1 class="hud-title">{{ pipeline.task_description }}</h1>
         </div>
-        <div>
-            {% if pipeline.status == 'RUNNING' or pipeline.status == 'PENDING' %}
+        <div style="text-align: right;">
             <div
-                style="display:flex;align-items:center;gap:.5rem;background:rgba(99,179,237,.07);border:1px solid rgba(99,179,237,.15);padding:.5rem 1rem;border-radius:var(--radius-sm);">
-                <span class="spinner"></span>
-                <span style="font-size:.8rem;color:var(--accent);" id="live-label">Live — polling every 3s</span>
+                style="font-size: 0.75rem; font-weight: 700; color: var(--text-dim); text-transform: uppercase; margin-bottom: 0.5rem;">
+                Iteration Sequence</div>
+            <div style="font-size: 2rem; font-weight: 800; font-family: var(--font-display);">
+                <span id="cur-iter">{{ pipeline.iteration_count }}</span><span
+                    style="color: var(--text-dim); font-size: 1.25rem;">/{{ pipeline.max_iterations }}</span>
             </div>
-            {% endif %}
         </div>
     </div>
 
-    <!-- Iteration progress bar -->
-    <div style="margin-bottom:1.75rem;">
-        <div
-            style="display:flex;justify-content:space-between;font-size:.72rem;color:var(--text-400);margin-bottom:.3rem;">
-            <span>Iteration progress</span>
-            <span id="iter-frac">{{ pipeline.iteration_count }}/{{ pipeline.max_iterations }}</span>
-        </div>
-        <div class="progress-track">
-            <div class="progress-fill" id="progress-fill"
-                style="width:{% widthratio pipeline.iteration_count pipeline.max_iterations 100 %}%;"></div>
-        </div>
+    <!-- Progress Line -->
+    <div class="progress-hud">
+        <div class="progress-hud-fill" id="progress-fill"
+            style="width: {% widthratio pipeline.iteration_count pipeline.max_iterations 100 %}%"></div>
     </div>
 
-    <!-- Agent status grid -->
-    <div class="agent-grid" id="agent-grid">
-        {% for agent in agent_names %}
-        {% with latest=pipeline.logs.all|dictsort:"created_at" %}
-        <div class="agent-card" id="agent-{{ agent }}" data-agent="{{ agent }}">
-            <div class="agent-icon">
-                {% if agent == 'ORCHESTRATOR' %}🎯
-                {% elif agent == 'PLANNER' %}📋
-                {% elif agent == 'REASONER' %}🧠
-                {% elif agent == 'CRITIQUE' %}🔍
-                {% elif agent == 'WRITER' %}✍️
-                {% elif agent == 'EDITOR' %}✂️
-                {% elif agent == 'REVIEWER' %}✅
+    <div class="hud-grid">
+        <!-- Sidebar: Agent Network -->
+        <aside>
+            <h3
+                style="font-size: 0.8rem; text-transform: uppercase; color: var(--text-muted); margin-bottom: 1.25rem; letter-spacing: 0.1em;">
+                Agent Network</h3>
+            <div class="agent-status-list">
+                <div class="agent-node" id="node-ORCHESTRATOR">
+                    <div class="agent-node-icon">🎯</div>
+                    <div class="agent-node-meta">
+                        <div class="agent-node-name">Orchestrator</div>
+                        <div class="agent-node-status" id="status-ORCHESTRATOR">Awaiting Dispatch</div>
+                    </div>
+                </div>
+                <div class="agent-node" id="node-PLANNER">
+                    <div class="agent-node-icon">📋</div>
+                    <div class="agent-node-meta">
+                        <div class="agent-node-name">Strategy Planner</div>
+                        <div class="agent-node-status" id="status-PLANNER">Standby</div>
+                    </div>
+                </div>
+                <div class="agent-node" id="node-REASONER">
+                    <div class="agent-node-icon">🧠</div>
+                    <div class="agent-node-meta">
+                        <div class="agent-node-name">Logical Reasoner</div>
+                        <div class="agent-node-status" id="status-REASONER">Standby</div>
+                    </div>
+                </div>
+                <div class="agent-node" id="node-CRITIQUE">
+                    <div class="agent-node-icon">🔍</div>
+                    <div class="agent-node-meta">
+                        <div class="agent-node-name">Synthesis Engine</div>
+                        <div class="agent-node-status" id="status-CRITIQUE">Standby</div>
+                    </div>
+                </div>
+                <div class="agent-node" id="node-WRITER">
+                    <div class="agent-node-icon">✍️</div>
+                    <div class="agent-node-meta">
+                        <div class="agent-node-name">Content Architect</div>
+                        <div class="agent-node-status" id="status-WRITER">Standby</div>
+                    </div>
+                </div>
+                <div class="agent-node" id="node-EDITOR">
+                    <div class="agent-node-icon">✂️</div>
+                    <div class="agent-node-meta">
+                        <div class="agent-node-name">Refinement Editor</div>
+                        <div class="agent-node-status" id="status-EDITOR">Standby</div>
+                    </div>
+                </div>
+                <div class="agent-node" id="node-REVIEWER">
+                    <div class="agent-node-icon">✅</div>
+                    <div class="agent-node-meta">
+                        <div class="agent-node-name">Quality Validator</div>
+                        <div class="agent-node-status" id="status-REVIEWER">Standby</div>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Workspace: Data Streams -->
+        <section class="control-center">
+            <div class="tab-header">
+                <button class="tab-btn active" onclick="switchTab('logs', this)">Audit Streams</button>
+                <button class="tab-btn" onclick="switchTab('critique', this)">Neural Critique</button>
+                <button class="tab-btn" onclick="switchTab('output', this)">Mission Output</button>
+            </div>
+
+            <!-- Audit Streams Tab -->
+            <div id="tab-logs" class="tab-content active">
+                <div id="logs-container">
+                    {% for log in logs %}
+                    <div class="log-entry">
+                        <div class="log-entry-header" onclick="toggleLog(this)">
+                            <div style="display: flex; align-items: center; gap: 12px;">
+                                <span class="badge badge-{{ log.status }}">{{ log.status }}</span>
+                                <span style="font-weight: 700; color: #fff;">{{ log.agent_name }}</span>
+                                <span style="font-size: 0.75rem; color: var(--text-dim);">Iter {{ log.iteration
+                                    }}</span>
+                            </div>
+                            <span style="color: var(--text-dim); transition: transform 0.2s;">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2">
+                                    <polyline points="6 9 12 15 18 9"></polyline>
+                                </svg>
+                            </span>
+                        </div>
+                        <div class="log-entry-body">
+                            <div style="margin-bottom: 1rem;">
+                                <div
+                                    style="color: var(--accent); font-weight: 700; margin-bottom: 0.5rem; text-transform: uppercase; font-size: 0.65rem;">
+                                    Neural Input</div>
+                                <div style="color: var(--text-main); font-family: var(--font-mono);">{{ log.input_text
+                                    }}</div>
+                            </div>
+                            <div>
+                                <div
+                                    style="color: var(--accent-emerald); font-weight: 700; margin-bottom: 0.5rem; text-transform: uppercase; font-size: 0.65rem;">
+                                    System Output</div>
+                                <div style="color: var(--text-main); font-family: var(--font-mono);">{{ log.output_text
+                                    }}</div>
+                            </div>
+                        </div>
+                    </div>
+                    {% empty %}
+                    <div style="text-align: center; padding: 4rem 2rem; color: var(--text-dim);">
+                        <svg class="animate-pulse" width="48" height="48" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2" style="margin-bottom: 1rem;">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <polyline points="12 6 12 12 16 14"></polyline>
+                        </svg>
+                        <p>Initializing agent communication streams...</p>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- Critique Tab -->
+            <div id="tab-critique" class="tab-content">
+                {% if latest_critique %}
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem;">
+                    <div class="glass-card">
+                        <div
+                            style="color: var(--accent-violet); font-weight: 800; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 1rem;">
+                            Structural Constraint</div>
+                        <div style="font-size: 0.9rem; line-height: 1.7; color: var(--text-main);">{{
+                            latest_critique.planner_critique|default:"Analysis pending..." }}</div>
+                    </div>
+                    <div class="glass-card">
+                        <div
+                            style="color: var(--accent); font-weight: 800; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 1rem;">
+                            Logical Validation</div>
+                        <div style="font-size: 0.9rem; line-height: 1.7; color: var(--text-main);">{{
+                            latest_critique.reasoner_critique|default:"Analysis pending..." }}</div>
+                    </div>
+                </div>
+                <div class="glass-card">
+                    <div
+                        style="color: var(--accent-emerald); font-weight: 800; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 1rem;">
+                        Consolidated Synthesis Checklist</div>
+                    <div style="font-size: 1rem; line-height: 1.8; color: #fff;">{{
+                        latest_critique.merged_critique|default:"Synthesis in progress..." }}</div>
+                </div>
+                {% else %}
+                <div style="text-align: center; padding: 4rem 2rem; color: var(--text-dim);">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        style="margin-bottom: 1rem;">
+                        <circle cx="11" cy="11" r="8"></circle>
+                        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                    </svg>
+                    <p>No critique data available for current iteration cycle.</p>
+                </div>
                 {% endif %}
             </div>
-            <div class="agent-name">{{ agent }}</div>
-            <div class="agent-status text-muted text-sm" id="agent-status-{{ agent }}">—</div>
-        </div>
-        {% endwith %}
-        {% endfor %}
-    </div>
 
-    <!-- Tabs -->
-    <div class="tabs">
-        <button class="tab-btn active" onclick="showTab('logs', this)">📋 Agent Logs</button>
-        <button class="tab-btn" onclick="showTab('critique', this)">🔍 Critique</button>
-        <button class="tab-btn" onclick="showTab('output', this)">📄 Final Output</button>
-    </div>
-
-    <!-- Tab: Logs -->
-    <div class="tab-pane active" id="tab-logs">
-        <div id="logs-container">
-            {% for log in logs %}
-            <div class="log-row">
-                <div class="log-header" onclick="toggleLog(this)">
-                    <div style="display:flex;align-items:center;gap:.75rem;">
-                        <span class="badge badge-{{ log.status }}">{{ log.status }}</span>
-                        <span style="font-size:.8rem;font-weight:600;color:var(--text-100);">{{ log.agent_name }}</span>
-                        <span style="font-size:.72rem;color:var(--text-400);">iter {{ log.iteration }}</span>
+            <!-- Output Tab -->
+            <div id="tab-output" class="tab-content">
+                <div class="glass-card" style="min-height: 400px; padding: 0;">
+                    <div
+                        style="padding: 1rem 1.5rem; border-bottom: 1px solid var(--glass-border); display: flex; justify-content: space-between; align-items: center;">
+                        <span
+                            style="font-weight: 700; font-size: 0.8rem; color: var(--text-muted); text-transform: uppercase;">Mission
+                            Final Deliverable</span>
+                        <button class="btn btn-secondary" style="padding: 8px 16px; font-size: 0.75rem;"
+                            onclick="copyOutput(this)">Copy to Clipboard</button>
                     </div>
-                    <div style="display:flex;align-items:center;gap:.5rem;">
-                        <span style="font-size:.72rem;color:var(--text-400);">{{ log.created_at|timesince }} ago</span>
-                        <span style="color:var(--text-400);font-size:1rem;">›</span>
+                    <div id="final-output-payload"
+                        style="padding: 2rem; font-family: var(--font-sans); line-height: 1.8; max-height: 600px; overflow-y: auto; color: #fff; white-space: pre-wrap;">
+                        {% if pipeline.status == 'DONE' %}{{ pipeline.final_output }}{% else %}<div
+                            style="color: var(--text-dim); text-align: center; padding: 4rem 0;">Awaiting mission
+                            completion to unlock deliverable.</div>{% endif %}
                     </div>
                 </div>
-                <div class="log-body">
-                    <strong style="color:var(--text-300);">INPUT:</strong>
-                    {{ log.input_text|truncatechars:800 }}
-
-                    <strong style="color:var(--text-300);">OUTPUT:</strong>
-                    {{ log.output_text|truncatechars:1200 }}
-                </div>
             </div>
-            {% empty %}
-            <div style="text-align:center;padding:3rem;color:var(--text-400);font-size:.875rem;">
-                <div style="font-size:2rem;margin-bottom:.5rem;">⏳</div>
-                Waiting for agents to start…
-            </div>
-            {% endfor %}
-        </div>
-    </div>
-
-    <!-- Tab: Critique -->
-    <div class="tab-pane" id="tab-critique">
-        {% if latest_critique %}
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem;">
-            <div class="card">
-                <div
-                    style="font-size:.72rem;font-weight:700;color:var(--accent);letter-spacing:.05em;text-transform:uppercase;margin-bottom:.75rem;">
-                    Planner Critique</div>
-                <div
-                    style="font-size:.8rem;color:var(--text-200);white-space:pre-wrap;line-height:1.7;max-height:260px;overflow-y:auto;">
-                    {{ latest_critique.planner_critique|default:"Pending…" }}</div>
-            </div>
-            <div class="card">
-                <div
-                    style="font-size:.72rem;font-weight:700;color:var(--accent-2);letter-spacing:.05em;text-transform:uppercase;margin-bottom:.75rem;">
-                    Reasoner Critique</div>
-                <div
-                    style="font-size:.8rem;color:var(--text-200);white-space:pre-wrap;line-height:1.7;max-height:260px;overflow-y:auto;">
-                    {{ latest_critique.reasoner_critique|default:"Pending…" }}</div>
-            </div>
-        </div>
-        <div class="card">
-            <div
-                style="font-size:.72rem;font-weight:700;color:var(--accent-3);letter-spacing:.05em;text-transform:uppercase;margin-bottom:.75rem;">
-                ✨ Merged Critique (Final Checklist)</div>
-            <div
-                style="font-size:.85rem;color:var(--text-100);white-space:pre-wrap;line-height:1.75;max-height:320px;overflow-y:auto;">
-                {{ latest_critique.merged_critique|default:"Pending…" }}</div>
-        </div>
-        {% else %}
-        <div style="text-align:center;padding:3rem;color:var(--text-400);">
-            <div style="font-size:2rem;margin-bottom:.5rem;">🔍</div>
-            No critique generated yet.
-        </div>
-        {% endif %}
-    </div>
-
-    <!-- Tab: Final Output -->
-    <div class="tab-pane" id="tab-output">
-        {% if pipeline.status == 'DONE' %}
-        <div style="display:flex;justify-content:flex-end;margin-bottom:.75rem;">
-            <button class="btn btn-ghost btn-sm" onclick="copyOutput()">📋 Copy</button>
-        </div>
-        <div class="output-box" id="final-output-box">{{ pipeline.final_output }}</div>
-        {% elif pipeline.status == 'MAX_ITER' %}
-        <div class="alert alert-error">
-            Pipeline reached the maximum iteration limit ({{ pipeline.max_iterations }}). No final output was produced.
-        </div>
-        {% elif pipeline.status == 'FAILED' %}
-        <div class="alert alert-error">
-            Pipeline failed. Check the agent logs for details.
-        </div>
-        {% else %}
-        <div style="text-align:center;padding:3rem;color:var(--text-400);">
-            <div style="font-size:2rem;margin-bottom:.5rem;">⏳</div>
-            Final output will appear here once the pipeline reaches <strong>DONE</strong> status.
-        </div>
-        {% endif %}
+        </section>
     </div>
 
 </div>
 {% endblock %}
 
-{% block extra_scripts %}
-<script>
-    const PIPELINE_ID = "{{ pipeline.id }}";
-    const IS_TERMINAL = {% if pipeline.status == 'DONE' or pipeline.status == 'FAILED' or pipeline.status == 'MAX_ITER' %}true{% else %} false{% endif %};
-
-    const AGENT_ICONS = {
-        ORCHESTRATOR: '🎯', PLANNER: '📋', REASONER: '🧠',
-        CRITIQUE: '🔍', WRITER: '✍️', EDITOR: '✂️', REVIEWER: '✅'
-    };
-
-    /* ── Tab switching ─────────────────────────── */
-    function showTab(tab, btn) {
-        document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
-        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-        document.getElementById('tab-' + tab).classList.add('active');
-        btn.classList.add('active');
-    }
-
-    /* ── Log accordion ─────────────────────────── */
-    function toggleLog(header) {
-        const body = header.nextElementSibling;
-        const arrow = header.querySelector('span:last-child');
-        const open = body.style.display === 'block';
-        body.style.display = open ? 'none' : 'block';
-        arrow.textContent = open ? '›' : '↓';
-    }
-
-    /* ── Copy output ───────────────────────────── */
-    function copyOutput() {
-        const text = document.getElementById('final-output-box').innerText;
-        navigator.clipboard.writeText(text).then(() => {
-            const btn = event.target;
-            btn.textContent = '✅ Copied!';
-            setTimeout(() => btn.textContent = '📋 Copy', 2000);
-        });
-    }
-
-    /* ── Live polling ──────────────────────────── */
-    function updateBadgeClass(el, status) {
-        el.className = 'badge badge-' + status;
-        el.textContent = status;
-    }
-
-    function updateAgentCard(name, log) {
-        const card = document.getElementById('agent-' + name);
-        const statusEl = document.getElementById('agent-status-' + name);
-        if (!card) return;
-        card.className = 'agent-card';
-        if (!log) { statusEl.textContent = '—'; return; }
-        if (log.status === 'SUCCESS') card.classList.add('done');
-        else if (log.status === 'FAILED') card.classList.add('failed');
-        else card.classList.add('active');
-        statusEl.textContent = log.status + ' · iter ' + log.iteration;
-    }
-
-    function updateLogsHTML(logs) {
-        const container = document.getElementById('logs-container');
-        if (!logs.length) return;
-        container.innerHTML = logs.map(log => `
-    <div class="log-row">
-      <div class="log-header" onclick="toggleLog(this)">
-        <div style="display:flex;align-items:center;gap:.75rem;">
-          <span class="badge badge-${log.status}">${log.status}</span>
-          <span style="font-size:.8rem;font-weight:600;color:var(--text-100);">${log.agent_name}</span>
-          <span style="font-size:.72rem;color:var(--text-400);">iter ${log.iteration}</span>
-        </div>
-        <div style="display:flex;align-items:center;gap:.5rem;">
-          <span style="font-size:.72rem;color:var(--text-400);">just now</span>
-          <span style="color:var(--text-400);font-size:1rem;">›</span>
-        </div>
-      </div>
-      <div class="log-body">
-<strong style="color:var(--text-300);">INPUT:</strong>
-${(log.input_text || '').substring(0, 800)}
-
-<strong style="color:var(--text-300);">OUTPUT:</strong>
-${(log.output_text || '').substring(0, 1200)}</div>
-    </div>`
-        ).join('');
-    }
-
-    async function poll() {
-        try {
-            const [statusRes, logsRes] = await Promise.all([
-                fetch(`/api/pipeline/${PIPELINE_ID}/status/`),
-                fetch(`/api/pipeline/${PIPELINE_ID}/logs/`)
-            ]);
-            const statusData = await statusRes.json();
-            const logsData = await logsRes.json();
-
-            /* Update status badge */
-            const badge = document.getElementById('status-badge');
-            updateBadgeClass(badge, statusData.status);
-
-            /* Update iteration counter + progress bar */
-            document.getElementById('iter-count').textContent = statusData.iteration_count;
-            document.getElementById('iter-frac').textContent =
-                statusData.iteration_count + '/' + statusData.max_iterations;
-            const pct = statusData.max_iterations > 0
-                ? (statusData.iteration_count / statusData.max_iterations * 100)
-                : 0;
-            document.getElementById('progress-fill').style.width = pct + '%';
-
-            /* Update per-agent cards */
-            const latest = statusData.latest_logs || {};
-            Object.keys(AGENT_ICONS).forEach(name => updateAgentCard(name, latest[name] || null));
-
-            /* Update logs list */
-            updateLogsHTML(logsData);
-
-            /* Final output tab */
-            if (statusData.status === 'DONE') {
-                try {
-                    const outRes = await fetch(`/api/pipeline/${PIPELINE_ID}/output/`);
-                    const outData = await outRes.json();
-                    document.getElementById('final-output-box') &&
-                        (document.getElementById('final-output-box').textContent = outData.final_output);
-                } catch (_) { }
-            }
-
-            /* Stop polling if terminal */
-            const terminal = ['DONE', 'FAILED', 'MAX_ITER'];
-            if (terminal.includes(statusData.status)) {
-                document.getElementById('live-label') &&
-                    (document.getElementById('live-label').textContent = 'Pipeline ' + statusData.status);
-                const spinner = document.querySelector('.spinner');
-                if (spinner) spinner.style.display = 'none';
-                return; // stop
-            }
-
-        } catch (e) {
-            console.error('Poll error:', e);
-        }
-        setTimeout(poll, 3000);
-    }
-
-    /* Start polling only if pipeline is not yet terminal */
-    if (!IS_TERMINAL) {
-        setTimeout(poll, 3000);
-    }
-
-    /* Initial agent card state from server-rendered logs */
-    {% for log in logs %}
-    (function () {
-        const card = document.getElementById('agent-{{ log.agent_name }}');
-        const statusEl = document.getElementById('agent-status-{{ log.agent_name }}');
-        if (card) {
-            card.className = 'agent-card {% if log.status == "SUCCESS" %}done{% elif log.status == "FAILED" %}failed{% else %}active{% endif %}';
-            statusEl.textContent = '{{ log.status }} · iter {{ log.iteration }}';
-        }
-    })();
-    {% endfor %}
-</script>
-{% endblock %}
+<div id="pipeline-config" data-id="{{ pipeline.id }}"
+    data-is-terminal="{{ pipeline.is_terminal|lower|default:'false' }}"
+    data-initial-logs='[{% for log in logs %}{"agent_name": "{{ log.agent_name }}", "status": "{{ log.status }}"}{% if not forloop.last %},{% endif %}{% endfor %}]'>
+</div>
+<script src="{% static 'orchestration/js/hud.js' %}"></script>

@@ -3,104 +3,182 @@
 {% block nav_dashboard %}active{% endblock %}
 
 {% block content %}
-<div class="animate-in">
+<div class="animate-fade-in">
 
     <!-- Hero Header -->
-    <div style="margin-bottom:2.5rem;">
-        <h1
-            style="font-size:2rem;font-weight:800;background:linear-gradient(135deg,#f0f4ff,#63b3ed);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-bottom:.4rem;">
-            Pipeline Dashboard
+    <header style="margin-bottom: 3rem;">
+        <h1 style="font-size: 2.5rem; letter-spacing: -0.02em; margin-bottom: 0.5rem;">
+            Pipeline <span class="text-gradient">Dashboard</span>
         </h1>
-        <p style="color:var(--text-300);font-size:.95rem;">
-            Monitor all active and completed multi-agent orchestration runs.
+        <p class="text-muted" style="font-size: 1.1rem; max-width: 600px;">
+            Monitor and manage your autonomous multi-agent orchestration streams in real-time.
         </p>
-    </div>
+    </header>
 
-    <!-- Stats bar -->
-    {% with total=pipelines.paginator.count %}
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1rem;margin-bottom:2rem;">
-        {% for label, status_val, color in stats %}
-        <div class="card" style="padding:1rem;border-color:rgba({{ color }},0.2);">
-            <div style="font-size:1.6rem;font-weight:800;color:rgb({{ color }});">{{ count }}</div>
-            <div
-                style="font-size:.75rem;color:var(--text-300);text-transform:uppercase;letter-spacing:.06em;margin-top:.1rem;">
-                {{ label }}</div>
-        </div>
-        {% endfor %}
-        <div class="card" style="padding:1rem;">
-            <div style="font-size:1.6rem;font-weight:800;color:var(--text-100);">{{ total }}</div>
-            <div
-                style="font-size:.75rem;color:var(--text-300);text-transform:uppercase;letter-spacing:.06em;margin-top:.1rem;">
-                Total Runs</div>
-        </div>
-    </div>
-    {% endwith %}
-
-    <!-- Pipeline list -->
-    {% if pipelines %}
-    <div style="display:flex;flex-direction:column;gap:.75rem;">
-        {% for pipeline in pipelines %}
-        <a href="{% url 'pipeline-detail' pipeline.pk %}" style="text-decoration:none;">
-            <div class="card"
-                style="display:grid;grid-template-columns:1fr auto auto;align-items:center;gap:1.5rem;cursor:pointer;">
-
-                <div style="min-width:0;">
-                    <div style="display:flex;align-items:center;gap:.6rem;margin-bottom:.3rem;">
-                        <span class="badge badge-{{ pipeline.status }}">{{ pipeline.status }}</span>
-                        <span style="font-size:.72rem;color:var(--text-400);font-family:var(--mono);">
-                            {{ pipeline.id|stringformat:"s"|truncatechars:13 }}
-                        </span>
-                    </div>
-                    <p
-                        style="font-size:.95rem;font-weight:500;color:var(--text-100);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
-                        {{ pipeline.task_description|truncatechars:90 }}
-                    </p>
-                    <p style="font-size:.75rem;color:var(--text-400);margin-top:.25rem;">
-                        Started {{ pipeline.created_at|timesince }} ago
-                    </p>
+    <!-- Stats Grid -->
+    <div
+        style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1.5rem; margin-bottom: 3rem;">
+        <div class="glass-card" style="padding: 1.5rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                <span class="text-muted" style="font-size: 0.8rem; font-weight: 600; text-transform: uppercase;">Total
+                    Runs</span>
+                <div
+                    style="background: rgba(59, 130, 246, 0.1); color: var(--accent); padding: 6px; border-radius: 8px;">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+                    </svg>
                 </div>
-
-                <div style="text-align:center;flex-shrink:0;">
-                    <div style="font-size:1.2rem;font-weight:700;color:var(--text-100);">{{ pipeline.iteration_count }}
-                    </div>
-                    <div style="font-size:.7rem;color:var(--text-400);">iterations</div>
-                </div>
-
-                <div style="flex-shrink:0;">
-                    <span style="color:var(--accent);font-size:1.2rem;opacity:.5;transition:opacity .2s;">›</span>
-                </div>
-
             </div>
-        </a>
-        {% endfor %}
+            <div style="font-size: 2rem; font-weight: 700; font-family: var(--font-display);">{{
+                pipelines.paginator.count }}</div>
+        </div>
+
+        <div class="glass-card" style="padding: 1.5rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                <span class="text-muted" style="font-size: 0.8rem; font-weight: 600; text-transform: uppercase;">Active
+                    Sessions</span>
+                <div
+                    style="background: rgba(139, 92, 246, 0.1); color: var(--accent-violet); padding: 6px; border-radius: 8px;">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                    </svg>
+                </div>
+            </div>
+            <div style="font-size: 2rem; font-weight: 700; font-family: var(--font-display);">
+                {{ active_count|default:"0" }}
+            </div>
+        </div>
+
+        <div class="glass-card" style="padding: 1.5rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                <span class="text-muted" style="font-size: 0.8rem; font-weight: 600; text-transform: uppercase;">System
+                    Health</span>
+                <div
+                    style="background: rgba(16, 185, 129, 0.1); color: var(--accent-emerald); padding: 6px; border-radius: 8px;">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="20 6 9 17 4 12"></polyline>
+                    </svg>
+                </div>
+            </div>
+            <div style="font-size: 2rem; font-weight: 700; font-family: var(--font-display);">
+                100<span style="font-size: 1.25rem; color: var(--text-dim);">%</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Pipeline List Section -->
+    <div class="glass-card" style="padding: 0; overflow: visible;">
+        <div
+            style="padding: 1.5rem 2rem; border-bottom: 1px solid var(--glass-border); display: flex; justify-content: space-between; align-items: center;">
+            <h3 style="font-size: 1.1rem;">Recent Orchestrations</h3>
+            <div style="display: flex; gap: 8px;">
+                <button class="btn btn-secondary" style="padding: 6px 12px; font-size: 0.75rem;">View All</button>
+            </div>
+        </div>
+
+        {% if pipelines %}
+        <div style="display: flex; flex-direction: column;">
+            {% for pipeline in pipelines %}
+            <a href="{% url 'pipeline-detail' pipeline.pk %}"
+                style="text-decoration: none; border-bottom: 1px solid var(--glass-border); transition: background 0.2s;"
+                class="pipeline-row">
+                <style>
+                    .pipeline-row:hover {
+                        background: var(--glass-highlight);
+                    }
+
+                    .pipeline-row:last-child {
+                        border-bottom: none;
+                    }
+                </style>
+                <div
+                    style="padding: 1.25rem 2rem; display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 2rem;">
+
+                    <div style="min-width: 0;">
+                        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
+                            <span class="badge badge-{{ pipeline.status }}">{{ pipeline.status }}</span>
+                            <span style="font-family: var(--font-mono); font-size: 0.7rem; color: var(--text-dim);">#{{
+                                pipeline.id|stringformat:"s"|truncatechars:12 }}</span>
+                        </div>
+                        <h4
+                            style="font-size: 1rem; color: #fff; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 600;">
+                            {{ pipeline.task_description }}
+                        </h4>
+                        <div
+                            style="font-size: 0.75rem; color: var(--text-dim); display: flex; align-items: center; gap: 6px;">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <circle cx="12" cy="12" r="10"></circle>
+                                <polyline points="12 6 12 12 16 14"></polyline>
+                            </svg>
+                            Started {{ pipeline.created_at|timesince }} ago
+                        </div>
+                    </div>
+
+                    <div style="text-align: right; min-width: 100px;">
+                        <div
+                            style="font-size: 1.2rem; font-weight: 700; color: #fff; font-family: var(--font-display);">
+                            {{ pipeline.iteration_count }}</div>
+                        <div
+                            style="font-size: 0.65rem; color: var(--text-dim); text-transform: uppercase; font-weight: 600; letter-spacing: 0.05em;">
+                            Iterations</div>
+                    </div>
+
+                    <div style="color: var(--text-dim);">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="9 18 15 12 9 6"></polyline>
+                        </svg>
+                    </div>
+                </div>
+            </a>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div style="text-align: center; padding: 5rem 2rem;">
+            <div
+                style="width: 80px; height: 80px; background: var(--bg-700); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 1.5rem;">
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round" style="color: var(--text-dim);">
+                    <path
+                        d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z">
+                    </path>
+                    <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+                    <line x1="12" y1="22.08" x2="12" y2="12"></line>
+                </svg>
+            </div>
+            <h3 style="margin-bottom: 0.5rem;">No pipelines yet</h3>
+            <p class="text-muted" style="margin-bottom: 2rem;">Initialize your first orchestration run to start
+                monitoring.</p>
+            <a href="{% url 'pipeline-create' %}" class="btn btn-primary">Create Pipeline</a>
+        </div>
+        {% endif %}
     </div>
 
     <!-- Pagination -->
     {% if is_paginated %}
-    <div style="display:flex;justify-content:center;gap:.5rem;margin-top:2rem;">
+    <div style="display: flex; justify-content: center; align-items: center; gap: 1rem; margin-top: 2rem;">
         {% if page_obj.has_previous %}
-        <a href="?page={{ page_obj.previous_page_number }}" class="btn btn-ghost btn-sm">← Prev</a>
+        <a href="?page={{ page_obj.previous_page_number }}" class="btn btn-secondary" style="padding: 8px 16px;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="15 18 9 12 15 6"></polyline>
+            </svg>
+        </a>
         {% endif %}
-        <span style="padding:.35rem .8rem;font-size:.78rem;color:var(--text-300);">
-            Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+        <span style="font-size: 0.85rem; color: var(--text-muted);">
+            Page <span style="color: #fff; font-weight: 600;">{{ page_obj.number }}</span> of {{
+            page_obj.paginator.num_pages }}
         </span>
         {% if page_obj.has_next %}
-        <a href="?page={{ page_obj.next_page_number }}" class="btn btn-ghost btn-sm">Next →</a>
+        <a href="?page={{ page_obj.next_page_number }}" class="btn btn-secondary" style="padding: 8px 16px;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="9 18 15 12 9 6"></polyline>
+            </svg>
+        </a>
         {% endif %}
-    </div>
-    {% endif %}
-
-    {% else %}
-    <!-- Empty state -->
-    <div style="text-align:center;padding:5rem 2rem;">
-        <div style="font-size:4rem;margin-bottom:1rem;opacity:.4;">🤖</div>
-        <h2 style="font-size:1.3rem;font-weight:600;color:var(--text-200);margin-bottom:.5rem;">
-            No pipelines yet
-        </h2>
-        <p style="color:var(--text-400);margin-bottom:1.5rem;font-size:.9rem;">
-            Start your first multi-agent pipeline to see it here.
-        </p>
-        <a href="{% url 'pipeline-create' %}" class="btn btn-primary">🚀 Start First Pipeline</a>
     </div>
     {% endif %}
 
@@ -108,11 +186,5 @@
 {% endblock %}
 
 {% block extra_scripts %}
-<script>
-    // Auto-refresh the dashboard every 5s if any pipeline is RUNNING
-    const hasRunning = document.querySelector('.badge-RUNNING');
-    if (hasRunning) {
-        setTimeout(() => location.reload(), 5000);
-    }
-</script>
+<script src="{% static 'orchestration/js/dashboard.js' %}"></script>
 {% endblock %}

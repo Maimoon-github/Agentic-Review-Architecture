@@ -1,0 +1,65 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{% block title %}AgentFlow — Intelligence Orchestrated{% endblock %}</title>
+    <meta name="description"
+        content="{% block description %}Production-grade multi-agent AI orchestration pipeline powered by Google Gemini.{% endblock %}" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+        href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+        rel="stylesheet" />
+    <link rel="stylesheet" href="{% static 'css/global.css' %}" />
+    {% block extra_head %}{% endblock %}
+</head>
+
+<body>
+    <nav class="nav">
+        <div class="nav-container">
+            <a href="{% url 'dashboard' %}" class="brand">
+                <div class="brand-logo">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
+                    </svg>
+                </div>
+                <span>AgentFlow</span>
+            </a>
+            <div class="nav-actions">
+                <a href="{% url 'dashboard' %}" class="nav-link {% block nav_dashboard %}{% endblock %}">Dashboard</a>
+                <a href="{% url 'pipeline-create' %}" class="btn-create">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="12" y1="5" x2="12" y2="19"></line>
+                        <line x1="5" y1="12" x2="19" y2="12"></line>
+                    </svg>
+                    New Pipeline
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <main class="main animate-fade-in">
+        {% block content %}{% endblock %}
+    </main>
+
+    <footer class="footer">
+        <div class="nav-container">
+            <p>&copy; 2026 AgentFlow &middot; Intelligence Orchestration Engine</p>
+            <p class="mt-2" style="font-size: 0.75rem;">
+                Powered by <a href="https://gemini.google.com/" target="_blank">Google Gemini 1.5 Pro</a> &middot;
+                Built with <a href="https://www.djangoproject.com/" target="_blank">Django</a> &amp;
+                <a href="https://docs.celeryq.dev/" target="_blank">Celery</a>
+            </p>
+        </div>
+    </footer>
+
+    <script src="{% static 'js/main.js' %}"></script>
+    {% block extra_scripts %}{% endblock %}
+</body>
+
+</html>

@@ -28,6 +28,13 @@ class DashboardView(ListView):
     ordering = ['-created_at']
     paginate_by = 20
 
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx['active_count'] = PipelineRun.objects.filter(
+            status__in=[PipelineRun.Status.PENDING, PipelineRun.Status.RUNNING]
+        ).count()
+        return ctx
+
 
 class PipelineCreateView(View):
     """

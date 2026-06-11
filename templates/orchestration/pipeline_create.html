@@ -32,12 +32,26 @@
             Agent Pipeline
         </div>
         <div style="display:flex;flex-wrap:wrap;gap:.4rem;align-items:center;">
-            {% for agent in "Orchestrator,Planner,Reasoner,Critique,Writer,Editor,Reviewer"|split:"," %}
             <span
-                style="background:var(--bg-700);border:1px solid var(--border);padding:.25rem .65rem;border-radius:100px;font-size:.72rem;font-weight:500;color:var(--text-200);">{{
-                agent }}</span>
-            {% if not forloop.last %}<span style="color:var(--text-400);font-size:.75rem;">→</span>{% endif %}
-            {% endfor %}
+                style="background:var(--bg-700);border:1px solid var(--border);padding:.25rem .65rem;border-radius:100px;font-size:.72rem;font-weight:500;color:var(--text-200);">Orchestrator</span>
+            <span style="color:var(--text-400);font-size:.75rem;">→</span>
+            <span
+                style="background:var(--bg-700);border:1px solid var(--border);padding:.25rem .65rem;border-radius:100px;font-size:.72rem;font-weight:500;color:var(--text-200);">Planner</span>
+            <span style="color:var(--text-400);font-size:.75rem;">→</span>
+            <span
+                style="background:var(--bg-700);border:1px solid var(--border);padding:.25rem .65rem;border-radius:100px;font-size:.72rem;font-weight:500;color:var(--text-200);">Reasoner</span>
+            <span style="color:var(--text-400);font-size:.75rem;">→</span>
+            <span
+                style="background:var(--bg-700);border:1px solid var(--border);padding:.25rem .65rem;border-radius:100px;font-size:.72rem;font-weight:500;color:var(--text-200);">Critique</span>
+            <span style="color:var(--text-400);font-size:.75rem;">→</span>
+            <span
+                style="background:var(--bg-700);border:1px solid var(--border);padding:.25rem .65rem;border-radius:100px;font-size:.72rem;font-weight:500;color:var(--text-200);">Writer</span>
+            <span style="color:var(--text-400);font-size:.75rem;">→</span>
+            <span
+                style="background:var(--bg-700);border:1px solid var(--border);padding:.25rem .65rem;border-radius:100px;font-size:.72rem;font-weight:500;color:var(--text-200);">Editor</span>
+            <span style="color:var(--text-400);font-size:.75rem;">→</span>
+            <span
+                style="background:var(--bg-700);border:1px solid var(--border);padding:.25rem .65rem;border-radius:100px;font-size:.72rem;font-weight:500;color:var(--text-200);">Reviewer</span>
         </div>
     </div>
 
@@ -58,9 +72,10 @@
             <div class="form-group">
                 <label class="form-label" for="id_max_iter">Max Iterations</label>
                 <select class="form-control" id="id_max_iter" name="max_iterations" style="cursor:pointer;">
-                    {% for n in "3,5,7,10"|split:"," %}
-                    <option value="{{ n }}" {% if n=="7" %}selected{% endif %}>{{ n }} iterations</option>
-                    {% endfor %}
+                    <option value="3">3 iterations</option>
+                    <option value="5">5 iterations</option>
+                    <option value="7" selected>7 iterations</option>
+                    <option value="10">10 iterations</option>
                 </select>
                 <div class="form-hint">
                     Number of Reviewer → re-plan loops before the pipeline stops. More = higher quality but slower.
@@ -86,25 +101,31 @@
             How It Works
         </div>
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:.75rem;">
-            {% for step in steps %}
             <div class="card" style="padding:1rem;">
-                <div style="font-size:1.3rem;margin-bottom:.4rem;">{{ step.icon }}</div>
-                <div style="font-size:.82rem;font-weight:600;color:var(--text-100);margin-bottom:.2rem;">{{ step.title
-                    }}</div>
-                <div style="font-size:.75rem;color:var(--text-400);">{{ step.desc }}</div>
+                <div style="font-size:1.3rem;margin-bottom:.4rem;">🎯</div>
+                <div style="font-size:.82rem;font-weight:600;color:var(--text-100);margin-bottom:.2rem;">Plan</div>
+                <div style="font-size:.75rem;color:var(--text-400);">Orchestrator breaks your task into a plan</div>
             </div>
-            {% empty %}
-            {% with steps_data="🎯,Plan,Orchestrator breaks your task into a plan;🧠,Reason,Reasoner validates logical
-            soundness;📝,Write,Writer drafts polished content;✂️,Edit,Editor applies 3 refinement
-            passes;✅,Review,Reviewer routes to DONE or re-plans" %}{% endwith %}
-            {% for item in "🎯 Plan — Orchestrator breaks your task into a plan,🧠 Reason — Reasoner validates logical
-            soundness,📝 Write — Writer drafts polished content,✂️ Edit — Editor applies 3 refinement passes,✅ Review —
-            Reviewer routes to DONE or re-plans"|split:"," %}
             <div class="card" style="padding:1rem;">
-                <div style="font-size:.8rem;color:var(--text-200);">{{ item }}</div>
+                <div style="font-size:1.3rem;margin-bottom:.4rem;">🧠</div>
+                <div style="font-size:.82rem;font-weight:600;color:var(--text-100);margin-bottom:.2rem;">Reason</div>
+                <div style="font-size:.75rem;color:var(--text-400);">Reasoner validates logical soundness</div>
             </div>
-            {% endfor %}
-            {% endfor %}
+            <div class="card" style="padding:1rem;">
+                <div style="font-size:1.3rem;margin-bottom:.4rem;">📝</div>
+                <div style="font-size:.82rem;font-weight:600;color:var(--text-100);margin-bottom:.2rem;">Write</div>
+                <div style="font-size:.75rem;color:var(--text-400);">Writer drafts polished content</div>
+            </div>
+            <div class="card" style="padding:1rem;">
+                <div style="font-size:1.3rem;margin-bottom:.4rem;">✂️</div>
+                <div style="font-size:.82rem;font-weight:600;color:var(--text-100);margin-bottom:.2rem;">Edit</div>
+                <div style="font-size:.75rem;color:var(--text-400);">Editor applies 3 refinement passes</div>
+            </div>
+            <div class="card" style="padding:1rem;">
+                <div style="font-size:1.3rem;margin-bottom:.4rem;">✅</div>
+                <div style="font-size:.82rem;font-weight:600;color:var(--text-100);margin-bottom:.2rem;">Review</div>
+                <div style="font-size:.75rem;color:var(--text-400);">Reviewer routes to DONE or re-plans</div>
+            </div>
         </div>
     </div>
 

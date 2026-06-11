@@ -3,7 +3,7 @@ DRF serializers for the orchestration pipeline API.
 """
 
 from rest_framework import serializers
-from orchestration.models import PipelineRun, AgentLog, CritiqueSnapshot
+from agentic_review.orchestration.models import PipelineRun, AgentLog, CritiqueSnapshot
 
 
 class AgentLogSerializer(serializers.ModelSerializer):

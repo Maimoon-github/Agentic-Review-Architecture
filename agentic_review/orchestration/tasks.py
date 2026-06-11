@@ -40,7 +40,7 @@ logger = logging.getLogger('orchestration')
 
 
 def _get_models():
-    from orchestration.models import PipelineRun, AgentLog, CritiqueSnapshot
+    from agentic_review.orchestration.models import PipelineRun, AgentLog, CritiqueSnapshot
     return PipelineRun, AgentLog, CritiqueSnapshot
 
 

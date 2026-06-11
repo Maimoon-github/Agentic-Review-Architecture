@@ -5,8 +5,9 @@ class OrchestrationConfig(AppConfig):
     """Django app config for the orchestration multi-agent pipeline."""
 
     default_auto_field = 'django.db.models.BigAutoField'
-    name = 'orchestration'
+    name = 'agentic_review.orchestration'
+    label = 'orchestration'
 
     def ready(self):
         """Import signals when the app is ready."""
-        import orchestration.signals  # noqa: F401
+        import agentic_review.orchestration.signals  # noqa: F401

@@ -3,7 +3,7 @@ URL routes for the orchestration app.
 """
 
 from django.urls import path
-from orchestration.views import (
+from agentic_review.orchestration.views import (
     PipelineStartView,
     PipelineStatusView,
     PipelineLogsView,

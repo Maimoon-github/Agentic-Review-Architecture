@@ -237,7 +237,7 @@
     <!-- Progress Line -->
     <div class="progress-hud">
         <div class="progress-hud-fill" id="progress-fill"
-            style="width: {% widthratio pipeline.iteration_count pipeline.max_iterations 100 %}%"></div>
+            data-progress="{% widthratio pipeline.iteration_count pipeline.max_iterations 100 %}"></div>
     </div>
 
     <div class="hud-grid">

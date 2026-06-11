@@ -6,6 +6,12 @@ const PIPELINE_ID = configEl.dataset.id;
 let isTerminal = configEl.dataset.isTerminal === 'true';
 
 document.addEventListener('DOMContentLoaded', () => {
+    // Initialize progress bar width
+    const progressFill = document.getElementById('progress-fill');
+    if (progressFill && progressFill.dataset.progress) {
+        progressFill.style.width = progressFill.dataset.progress + '%';
+    }
+
     // Initial node sync from server-side logs
     const logs = JSON.parse(configEl.dataset.initialLogs || '[]');
     logs.forEach(log => {

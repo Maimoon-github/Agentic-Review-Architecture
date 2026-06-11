@@ -52,7 +52,7 @@ ROOT_URLCONF = 'agentic_review.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [BASE_DIR / 'templates'],
+        'DIRS': [BASE_DIR / 'agentic_review' / 'templates'],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -170,6 +170,6 @@ if SENTRY_DSN and not DEBUG:
     )
 
 # ─── Static files ──────────────────────────────────────────────────────────────
-STATICFILES_DIRS = [BASE_DIR / 'static']
+STATICFILES_DIRS = [BASE_DIR / 'agentic_review' / 'static']
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 

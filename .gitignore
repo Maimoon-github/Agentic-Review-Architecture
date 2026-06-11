@@ -1,9 +1,70 @@
+# ──────────────────────────────────────────
+# Django Multi-Agent Orchestration System
+# .gitignore
+# ──────────────────────────────────────────
+
+# Environment
 .env
-db.sqlite3
+.env.*
+!.env.example
+
+# Python
 __pycache__/
-*.pyc
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+wheels/
+pip-wheel-metadata/
+
+# Virtual Environment
+venv/
+.venv/
+env/
+.env/
+
+# Django
+*.log
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+media/
+staticfiles/
+static_root/
+
+# Celery
+celerybeat-schedule
+celerybeat.pid
+*.pid
+
+# Redis dump
+dump.rdb
+
+# Testing & Coverage
+.coverage
+coverage.xml
+htmlcov/
+.pytest_cache/
+.tox/
+nosetests.xml
+test-results/
+
+# IDE
 .vscode/
 .idea/
-*.log
-.env.example
-.env
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Docker
+*.env.docker
+
+# Secrets
+*.pem
+*.key
+secrets.json

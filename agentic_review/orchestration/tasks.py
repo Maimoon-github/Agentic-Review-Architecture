@@ -110,6 +110,20 @@ def _log_agent(pipeline, agent_name, iteration, input_text, output_text, status)
     )
 
 
+def _check_iteration_guard(pipeline):
+    """
+    Check if the pipeline has exceeded max_iterations.
+    If so, marks as MAX_ITER and returns True.
+    """
+    if pipeline.iteration_count >= pipeline.max_iterations:
+        pipeline.status = pipeline.Status.MAX_ITER
+        pipeline.save(update_fields=['status'])
+        logger.warning("Pipeline %s hit iteration limit.", pipeline.id)
+        return True
+    return False
+
+
+
 def _latest_log(pipeline, agent_name):
     """Return the most recent AgentLog for a given agent, or None."""
     PipelineRun, AgentLog, CritiqueSnapshot = _get_models()
@@ -136,29 +150,24 @@ def run_orchestrator(self, pipeline_run_id: str):
 
     Responsibilities:
       1. Marks the pipeline as RUNNING.
-      2. Fans out to Planner and Reasoner in parallel using a Celery group.
-      3. After both complete (via a chord callback), triggers Final Critique.
+      2. Initiates the iterative Planning & Reasoning cycle.
     """
     PipelineRun, AgentLog, CritiqueSnapshot = _get_models()
     pipeline = PipelineRun.objects.get(id=pipeline_run_id)
     pipeline.status = PipelineRun.Status.RUNNING
     pipeline.save(update_fields=['status'])
 
-    # Create an initial CritiqueSnapshot so Planner / Reasoner have something to write to.
-    CritiqueSnapshot.objects.create(pipeline=pipeline, iteration=pipeline.iteration_count)
+    # Initialize first snapshot
+    CritiqueSnapshot.objects.get_or_create(pipeline=pipeline, iteration=pipeline.iteration_count)
 
     input_text = pipeline.task_description
     try:
-        # Parallel fan-out: Planner + Reasoner
-        parallel_tasks = group(
-            run_planner.s(pipeline_run_id),
-            run_reasoner.s(pipeline_run_id),
-        )
-        # chord: run parallel tasks, then fire Final Critique when both done
-        workflow = chord(parallel_tasks)(run_final_critique.s(pipeline_run_id))
+        # Start sequential sub-loop: Planner -> Reasoner
+        run_planner.delay(pipeline_run_id)
+
         _log_agent(
             pipeline, AgentLog.AgentName.ORCHESTRATOR, pipeline.iteration_count,
-            input_text, f"Dispatched chord → Planner + Reasoner → Final Critique",
+            input_text, "Pipeline started. Dispatched to Planner.",
             AgentLog.LogStatus.SUCCESS,
         )
     except Exception as exc:
@@ -171,31 +180,33 @@ def run_orchestrator(self, pipeline_run_id: str):
         raise
 
 
+
 @shared_task(bind=True, name='orchestration.run_planner')
-def run_planner(self, pipeline_run_id: str):
+def run_planner(self, pipeline_run_id: str, sub_iteration: int = 0, feedback: str = ""):
     """
     PLANNER agent.
 
-    Produces a structured plan with sub-tasks and success criteria.
-    Stores its structural_critique on the current CritiqueSnapshot so the
-    Reasoner and Final Critique agents can reference it via the database.
-
-    Expected LLM output schema:
-        { plan: str, success_criteria: [str], structural_critique: str }
+    Produces a structured plan. If called from Reasoner feedback, incorporates details.
     """
     PipelineRun, AgentLog, CritiqueSnapshot = _get_models()
     pipeline = PipelineRun.objects.get(id=pipeline_run_id)
 
-    # Enrich prompt with any reviewer mismatch context from the previous iteration.
+    if _check_iteration_guard(pipeline):
+        return
+
+    # Mismatch context from Reviewer (if any)
     reviewer_log = _latest_log(pipeline, AgentLog.AgentName.REVIEWER)
     mismatch_context = ""
-    if reviewer_log and reviewer_log.output_text:
-        mismatch_context = f"\n\nReviewer mismatch context from previous iteration:\n{reviewer_log.output_text}"
+    if reviewer_log and reviewer_log.output_text and pipeline.iteration_count > 0:
+        mismatch_context = f"\n\nReviewer mismatch context:\n{reviewer_log.output_text}"
 
-    user_prompt = pipeline.task_description + mismatch_context
+    # Reasoner feedback context (if any)
+    reasoner_feedback = f"\n\nReasoner Feedback (sub-iteration {sub_iteration}):\n{feedback}" if feedback else ""
+
+    user_prompt = pipeline.task_description + mismatch_context + reasoner_feedback
     system_prompt = (
-        "You are a Strategic Planner. Given the task, produce a structured plan "
-        "with sub-tasks and success criteria. "
+        "You are a Strategic Planner. Produce a structured plan with sub-tasks and success criteria. "
+        "If you received feedback from a Reasoner, address it specifically in your revised plan. "
         "Output JSON: { \"plan\": str, \"success_criteria\": [str], \"structural_critique\": str }"
     )
 
@@ -204,7 +215,6 @@ def run_planner(self, pipeline_run_id: str):
         output_text = json.dumps(result)
         status = AgentLog.LogStatus.SUCCESS
 
-        # Write planner_critique to the latest CritiqueSnapshot
         snapshot = _latest_critique(pipeline)
         if snapshot:
             snapshot.planner_critique = result.get('structural_critique', '')
@@ -213,7 +223,6 @@ def run_planner(self, pipeline_run_id: str):
     except (json.JSONDecodeError, Exception) as exc:
         output_text = str(exc)
         status = AgentLog.LogStatus.FAILED
-        logger.error("Planner failed for pipeline %s: %s", pipeline_run_id, exc)
         pipeline.status = PipelineRun.Status.FAILED
         pipeline.save(update_fields=['status'])
 
@@ -222,18 +231,18 @@ def run_planner(self, pipeline_run_id: str):
         user_prompt, output_text, status
     )
 
+    if status == AgentLog.LogStatus.SUCCESS:
+        run_reasoner.delay(pipeline_run_id, sub_iteration=sub_iteration)
+
+
 
 @shared_task(bind=True, name='orchestration.run_reasoner')
-def run_reasoner(self, pipeline_run_id: str):
+def run_reasoner(self, pipeline_run_id: str, sub_iteration: int = 0):
     """
     REASONER agent.
 
-    Validates the logical soundness of the Planner's output by identifying
-    gaps and contradictions.  Stores its reasoning_critique on the current
-    CritiqueSnapshot.
-
-    Expected LLM output schema:
-        { analysis: str, gaps: [str], reasoning_critique: str }
+    Validates the plan. If issues found, loops back to Planner.
+    Output JSON: { analysis: str, gaps: [str], reasoning_critique: str, sound: bool }
     """
     PipelineRun, AgentLog, CritiqueSnapshot = _get_models()
     pipeline = PipelineRun.objects.get(id=pipeline_run_id)
@@ -243,8 +252,7 @@ def run_reasoner(self, pipeline_run_id: str):
 
     system_prompt = (
         "You are an Analytical Reasoner. Validate the logical soundness of the given plan. "
-        "Identify gaps or contradictions. "
-        "Output JSON: { \"analysis\": str, \"gaps\": [str], \"reasoning_critique\": str }"
+        "Output JSON: { \"analysis\": str, \"gaps\": [str], \"reasoning_critique\": str, \"sound\": bool }"
     )
 
     try:
@@ -252,16 +260,22 @@ def run_reasoner(self, pipeline_run_id: str):
         output_text = json.dumps(result)
         status = AgentLog.LogStatus.SUCCESS
 
-        # Write reasoner_critique to the latest CritiqueSnapshot
         snapshot = _latest_critique(pipeline)
         if snapshot:
             snapshot.reasoner_critique = result.get('reasoning_critique', '')
             snapshot.save(update_fields=['reasoner_critique'])
 
+        is_sound = result.get('sound', False)
+        
+        # Iterative Loop logic
+        if not is_sound and sub_iteration < 2:
+            _log_agent(pipeline, AgentLog.AgentName.REASONER, pipeline.iteration_count, user_prompt, output_text, status)
+            run_planner.delay(pipeline_run_id, sub_iteration=sub_iteration + 1, feedback=result.get('analysis', ''))
+            return
+
     except (json.JSONDecodeError, Exception) as exc:
         output_text = str(exc)
         status = AgentLog.LogStatus.FAILED
-        logger.error("Reasoner failed for pipeline %s: %s", pipeline_run_id, exc)
         pipeline.status = PipelineRun.Status.FAILED
         pipeline.save(update_fields=['status'])
 
@@ -269,6 +283,10 @@ def run_reasoner(self, pipeline_run_id: str):
         pipeline, AgentLog.AgentName.REASONER, pipeline.iteration_count,
         user_prompt, output_text, status
     )
+
+    if status == AgentLog.LogStatus.SUCCESS:
+        run_final_critique.delay(None, pipeline_run_id)
+
 
 
 @shared_task(bind=True, name='orchestration.run_final_critique')
@@ -339,90 +357,96 @@ def run_final_critique(self, results, pipeline_run_id: str):
 
 
 @shared_task(bind=True, name='orchestration.run_writer')
-def run_writer(self, pipeline_run_id: str):
+def run_writer(self, pipeline_run_id: str, editor_feedback: str = ""):
     """
     WRITER agent.
 
-    Generates a complete, polished content draft that satisfies every item
-    on the merged critique checklist.  Output is plain text (no JSON).
-    After completion, chains to the Editor for a three-pass refinement.
+    Generates content. If editor_feedback is provided, it reviews and incorporates/rejects it.
+    Decides whether to submit to Reviewer or call Editor again.
     """
     PipelineRun, AgentLog, CritiqueSnapshot = _get_models()
     pipeline = PipelineRun.objects.get(id=pipeline_run_id)
 
+    if _check_iteration_guard(pipeline):
+        return
+
     snapshot = _latest_critique(pipeline)
     merged_critique = snapshot.merged_critique if snapshot else ""
+    
+    # Context: original task + critique + optional editor feedback
     user_prompt = (
         f"Original task:\n{pipeline.task_description}\n\n"
-        f"Critique checklist to satisfy:\n{merged_critique}"
+        f"Critique checklist:\n{merged_critique}"
     )
+    if editor_feedback:
+        user_prompt += f"\n\nEditor Feedback:\n{editor_feedback}\n\nPlease review this feedback and produce the final draft."
+
     system_prompt = (
-        "You are a Content Writer. Write a complete, polished draft that satisfies "
-        "every item on the critique checklist. Output the full draft text only, no JSON."
+        "You are a Content Writer. Write a polished draft satisfying the checklist. "
+        "If you received Editor feedback, finalize the content based on it. "
+        "Output JSON: { \"draft\": str, \"ready_for_review\": bool, \"notes_for_editor\": str }"
     )
 
     try:
-        output_text = _call_llm(system_prompt, user_prompt)
+        result = _call_llm_json(system_prompt, user_prompt)
+        output_text = result.get('draft', '')
+        is_ready = result.get('ready_for_review', False)
         status = AgentLog.LogStatus.SUCCESS
     except Exception as exc:
         output_text = str(exc)
+        is_ready = False
         status = AgentLog.LogStatus.FAILED
-        logger.error("Writer failed for pipeline %s: %s", pipeline_run_id, exc)
         pipeline.status = PipelineRun.Status.FAILED
         pipeline.save(update_fields=['status'])
 
     _log_agent(
         pipeline, AgentLog.AgentName.WRITER, pipeline.iteration_count,
-        user_prompt, output_text, status
+        user_prompt, json.dumps(result) if status == AgentLog.LogStatus.SUCCESS else output_text, status
     )
 
     if status == AgentLog.LogStatus.SUCCESS:
-        run_editor.delay(pipeline_run_id)
+        if is_ready:
+            run_reviewer.delay(pipeline_run_id)
+        else:
+            run_editor.delay(pipeline_run_id, notes=result.get('notes_for_editor', ''))
+
 
 
 @shared_task(bind=True, name='orchestration.run_editor')
-def run_editor(self, pipeline_run_id: str):
+def run_editor(self, pipeline_run_id: str, notes: str = ""):
     """
     EDITOR agent (sub-agent of Writer).
 
-    Performs three editorial passes over the Writer's draft:
-      1. MODIFY — fix clarity, tone, and accuracy issues
-      2. ADD    — insert missing detail or examples
-      3. DELETE — remove redundancy or off-topic content
-
-    The Editor's refined output overwrites the latest WRITER AgentLog so that
-    the Reviewer always sees the Editor-refined version.  This keeps the
-    Writer→Editor loop transparent to downstream agents.
+    Executes fine-grained content manipulation and returns to Writer for review.
     """
     PipelineRun, AgentLog, CritiqueSnapshot = _get_models()
     pipeline = PipelineRun.objects.get(id=pipeline_run_id)
 
     writer_log = _latest_log(pipeline, AgentLog.AgentName.WRITER)
     if not writer_log:
-        logger.error("Editor: no Writer log found for pipeline %s", pipeline_run_id)
         return
 
-    user_prompt = writer_log.output_text
+    # Extract draft from writer's JSON output
+    try:
+        writer_data = json.loads(writer_log.output_text)
+        current_draft = writer_data.get('draft', '')
+    except:
+        current_draft = writer_log.output_text
+
+    user_prompt = f"Current Draft:\n{current_draft}\n\nNotes from Writer:\n{notes}"
     system_prompt = (
-        "You are a Content Editor. Perform three passes:\n"
-        "1. MODIFY — fix clarity, tone, and accuracy issues.\n"
-        "2. ADD    — insert missing detail or examples.\n"
-        "3. DELETE — remove redundancy or off-topic content.\n"
-        "Return only the final refined text."
+        "You are a Content Editor. Perform three passes: MODIFY, ADD, DELETE. "
+        "Return the refined text AND your reasoning. "
+        "Output JSON: { \"refined_text\": str, \"editorial_notes\": str }"
     )
 
     try:
-        output_text = _call_llm(system_prompt, user_prompt)
+        result = _call_llm_json(system_prompt, user_prompt)
+        output_text = json.dumps(result)
         status = AgentLog.LogStatus.SUCCESS
-
-        # Absorb editor output into the Writer log so Reviewer sees the refined draft.
-        writer_log.output_text = output_text
-        writer_log.save(update_fields=['output_text'])
-
     except Exception as exc:
         output_text = str(exc)
         status = AgentLog.LogStatus.FAILED
-        logger.error("Editor failed for pipeline %s: %s", pipeline_run_id, exc)
         pipeline.status = PipelineRun.Status.FAILED
         pipeline.save(update_fields=['status'])
 
@@ -432,7 +456,8 @@ def run_editor(self, pipeline_run_id: str):
     )
 
     if status == AgentLog.LogStatus.SUCCESS:
-        run_reviewer.delay(pipeline_run_id)
+        run_writer.delay(pipeline_run_id, editor_feedback=result.get('refined_text', ''))
+
 
 
 @shared_task(bind=True, name='orchestration.run_reviewer')
@@ -461,8 +486,18 @@ def run_reviewer(self, pipeline_run_id: str):
 
     writer_log = _latest_log(pipeline, AgentLog.AgentName.WRITER)
     snapshot = _latest_critique(pipeline)
-    writer_output = writer_log.output_text if writer_log else ""
+    
+    # Extract draft from writer's JSON output
+    writer_output = ""
+    if writer_log:
+        try:
+            writer_data = json.loads(writer_log.output_text)
+            writer_output = writer_data.get('draft', writer_log.output_text)
+        except:
+            writer_output = writer_log.output_text
+            
     merged_critique = snapshot.merged_critique if snapshot else ""
+
 
     user_prompt = (
         f"Draft to review:\n{writer_output}\n\n"
@@ -510,34 +545,21 @@ def run_reviewer(self, pipeline_run_id: str):
     pipeline.iteration_count += 1
     pipeline.save(update_fields=['iteration_count'])
 
-    if pipeline.iteration_count >= pipeline.max_iterations:
-        pipeline.status = PipelineRun.Status.MAX_ITER
-        pipeline.save(update_fields=['status'])
-        logger.warning("Pipeline %s hit max iterations (%d).",
-                       pipeline_run_id, pipeline.max_iterations)
+    if _check_iteration_guard(pipeline):
         return
 
-    # Create a new CritiqueSnapshot for the next iteration
-    CritiqueSnapshot.objects.create(pipeline=pipeline, iteration=pipeline.iteration_count)
+    # Create a new CritiqueSnapshot for the next iteration, PRESERVING previous critiques
+    new_snapshot = CritiqueSnapshot.objects.create(
+        pipeline=pipeline, 
+        iteration=pipeline.iteration_count,
+        planner_critique=snapshot.planner_critique if snapshot else '',
+        reasoner_critique=snapshot.reasoner_critique if snapshot else ''
+    )
 
     structural = result.get('structural_issues', False)
     logical = result.get('logical_issues', False)
 
-    if structural and logical:
-        # Both issues: re-run planner + reasoner in parallel, then final critique
-        parallel_tasks = group(
-            run_planner.s(pipeline_run_id),
-            run_reasoner.s(pipeline_run_id),
-        )
-        chord(parallel_tasks)(run_final_critique.s(pipeline_run_id))
-    elif structural:
-        chord(group(run_planner.s(pipeline_run_id)))(run_final_critique.s(pipeline_run_id))
-    elif logical:
-        chord(group(run_reasoner.s(pipeline_run_id)))(run_final_critique.s(pipeline_run_id))
-    else:
-        # Default: re-run both
-        parallel_tasks = group(
-            run_planner.s(pipeline_run_id),
-            run_reasoner.s(pipeline_run_id),
-        )
-        chord(parallel_tasks)(run_final_critique.s(pipeline_run_id))
+    # Routing logic remains similar but triggers the new sequential/looped tasks
+    if structural or logical or True: # Default to re-planning if not specified
+        run_planner.delay(pipeline_run_id)
+

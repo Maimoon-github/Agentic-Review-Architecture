@@ -13,8 +13,8 @@ import time
 from django.core.management.base import BaseCommand, CommandError
 from django.test.utils import override_settings
 
-from orchestration.models import PipelineRun
-from orchestration.tasks import run_orchestrator
+from agentic_review.orchestration.models import PipelineRun
+from agentic_review.orchestration.tasks import run_orchestrator
 
 
 class Command(BaseCommand):

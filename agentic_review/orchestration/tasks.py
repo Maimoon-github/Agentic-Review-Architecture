@@ -29,9 +29,16 @@ CritiqueSnapshot).  Every task is idempotent and fully restartable.
 
 import json
 import logging
-from celery import shared_task, group, chord
 import google.generativeai as genai
+from typing import Type
+from pydantic import BaseModel, ValidationError
+from celery import shared_task, group, chord
 from django.conf import settings
+from agentic_review.orchestration.schemas import (
+    PlanOutput, ReasonerOutput, FinalCritiqueOutput, 
+    WriterOutput, EditorOutput, ReviewerOutput
+)
+
 
 logger = logging.getLogger('orchestration')
 
@@ -51,51 +58,44 @@ MAX_TOKENS = 2000
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 
-def _call_llm(system_prompt: str, user_prompt: str) -> str:
-    """Call the Google Gemini API and return the text response."""
+def _call_agent(system_prompt: str, user_prompt: str, schema: Type[BaseModel]) -> dict:
+    """
+    Call Gemini in JSON mode and validate against a Pydantic schema.
+    """
     genai.configure(api_key=settings.GEMINI_API_KEY)
+    
     model = genai.GenerativeModel(
         model_name=MODEL,
         system_instruction=system_prompt
     )
+    
     response = model.generate_content(
         user_prompt,
         generation_config=genai.types.GenerationConfig(
+            response_mime_type="application/json",
             max_output_tokens=MAX_TOKENS,
+            temperature=0.2,
         )
     )
-    return response.text
-
-
-def _call_llm_json(system_prompt: str, user_prompt: str, retry_on_error: bool = True) -> dict:
-    """
-    Call the LLM expecting a JSON response.
-
-    On JSONDecodeError, retries once with an explicit JSON-only suffix.
-    If the retry also fails, raises the original JSONDecodeError.
-    """
-    raw = _call_llm(system_prompt, user_prompt)
+    
+    text = response.text.strip()
     try:
-        # Strip markdown fences if model wraps output in ```json ... ```
-        text = raw.strip()
-        if text.startswith("```"):
-            text = text.split("```", 2)[1]
-            if text.startswith("json"):
-                text = text[4:]
-            text = text.rsplit("```", 1)[0].strip()
-        return json.loads(text)
-    except (json.JSONDecodeError, IndexError):
-        if not retry_on_error:
-            raise
-        retry_prompt = user_prompt + "\n\nIMPORTANT: respond ONLY in valid JSON, no markdown fences."
-        raw2 = _call_llm(system_prompt, retry_prompt)
-        text2 = raw2.strip()
-        if text2.startswith("```"):
-            text2 = text2.split("```", 2)[1]
-            if text2.startswith("json"):
-                text2 = text2[4:]
-            text2 = text2.rsplit("```", 1)[0].strip()
-        return json.loads(text2)  # Let caller handle this JSONDecodeError
+        data = json.loads(text)
+        return schema.model_validate(data).model_dump()
+    except (json.JSONDecodeError, ValidationError) as e:
+        logger.error(f"Agent validation failed. Raw: {text} | Error: {e}")
+        # Retry once with explicit json hint
+        retry_prompt = f"{user_prompt}\n\nIMPORTANT: Respond ONLY in valid JSON matching this schema: {schema.model_json_schema()}"
+        response2 = model.generate_content(
+            retry_prompt,
+            generation_config=genai.types.GenerationConfig(
+                response_mime_type="application/json",
+                max_output_tokens=MAX_TOKENS,
+            )
+        )
+        data2 = json.loads(response2.text.strip())
+        return schema.model_validate(data2).model_dump()
+
 
 
 def _log_agent(pipeline, agent_name, iteration, input_text, output_text, status):
@@ -207,25 +207,25 @@ def run_planner(self, pipeline_run_id: str, sub_iteration: int = 0, feedback: st
     user_prompt = pipeline.task_description + mismatch_context + reasoner_feedback
     system_prompt = (
         "You are a Strategic Planner. Produce a structured plan with sub-tasks and success criteria. "
-        "If you received feedback from a Reasoner, address it specifically in your revised plan. "
-        "Output JSON: { \"plan\": str, \"success_criteria\": [str], \"structural_critique\": str }"
+        "Address any previous feedback in your revised plan."
     )
 
     try:
-        result = _call_llm_json(system_prompt, user_prompt)
+        result = _call_agent(system_prompt, user_prompt, PlanOutput)
         output_text = json.dumps(result)
         status = AgentLog.LogStatus.SUCCESS
 
         snapshot = _latest_critique(pipeline)
         if snapshot:
-            snapshot.planner_critique = result.get('structural_critique', '')
+            snapshot.planner_critique = result['structural_critique']
             snapshot.save(update_fields=['planner_critique'])
 
-    except (json.JSONDecodeError, Exception) as exc:
+    except Exception as exc:
         output_text = str(exc)
         status = AgentLog.LogStatus.FAILED
         pipeline.status = PipelineRun.Status.FAILED
         pipeline.save(update_fields=['status'])
+
 
     _log_agent(
         pipeline, AgentLog.AgentName.PLANNER, pipeline.iteration_count,
@@ -251,34 +251,32 @@ def run_reasoner(self, pipeline_run_id: str, sub_iteration: int = 0):
     planner_log = _latest_log(pipeline, AgentLog.AgentName.PLANNER)
     user_prompt = planner_log.output_text if planner_log else pipeline.task_description
 
-    system_prompt = (
-        "You are an Analytical Reasoner. Validate the logical soundness of the given plan. "
-        "Output JSON: { \"analysis\": str, \"gaps\": [str], \"reasoning_critique\": str, \"sound\": bool }"
-    )
+    system_prompt = "You are an Analytical Reasoner. Validate the logical soundness of the given plan."
 
     try:
-        result = _call_llm_json(system_prompt, user_prompt)
+        result = _call_agent(system_prompt, user_prompt, ReasonerOutput)
         output_text = json.dumps(result)
         status = AgentLog.LogStatus.SUCCESS
 
         snapshot = _latest_critique(pipeline)
         if snapshot:
-            snapshot.reasoner_critique = result.get('reasoning_critique', '')
+            snapshot.reasoner_critique = result['reasoning_critique']
             snapshot.save(update_fields=['reasoner_critique'])
 
-        is_sound = result.get('sound', False)
+        is_sound = result['sound']
         
         # Iterative Loop logic
         if not is_sound and sub_iteration < 2:
             _log_agent(pipeline, AgentLog.AgentName.REASONER, pipeline.iteration_count, user_prompt, output_text, status)
-            run_planner.delay(pipeline_run_id, sub_iteration=sub_iteration + 1, feedback=result.get('analysis', ''))
+            run_planner.delay(pipeline_run_id, sub_iteration=sub_iteration + 1, feedback=result['analysis'])
             return
 
-    except (json.JSONDecodeError, Exception) as exc:
+    except Exception as exc:
         output_text = str(exc)
         status = AgentLog.LogStatus.FAILED
         pipeline.status = PipelineRun.Status.FAILED
         pipeline.save(update_fields=['status'])
+
 
     _log_agent(
         pipeline, AgentLog.AgentName.REASONER, pipeline.iteration_count,
@@ -321,27 +319,23 @@ def run_final_critique(self, results, pipeline_run_id: str):
         f"Planner structural critique:\n{planner_crit}\n\n"
         f"Reasoner reasoning critique:\n{reasoner_crit}"
     )
-    system_prompt = (
-        "You are a Synthesis Engine. Merge the Planner's structural critique and the "
-        "Reasoner's reasoning critique into a single gold-standard review checklist. "
-        "Output JSON: { \"merged_critique\": str, \"checklist\": [str] }"
-    )
+    system_prompt = "You are a Synthesis Engine. Merge the Planner's structural critique and the Reasoner's reasoning critique into a single gold-standard review checklist."
 
     try:
-        result = _call_llm_json(system_prompt, user_prompt)
+        result = _call_agent(system_prompt, user_prompt, FinalCritiqueOutput)
         output_text = json.dumps(result)
         status = AgentLog.LogStatus.SUCCESS
 
         if snapshot:
-            snapshot.merged_critique = result.get('merged_critique', '')
+            snapshot.merged_critique = result['merged_critique']
             snapshot.save(update_fields=['merged_critique'])
 
-    except (json.JSONDecodeError, Exception) as exc:
+    except Exception as exc:
         output_text = str(exc)
         status = AgentLog.LogStatus.FAILED
-        logger.error("Final Critique failed for pipeline %s: %s", pipeline_run_id, exc)
         pipeline.status = PipelineRun.Status.FAILED
         pipeline.save(update_fields=['status'])
+
         _log_agent(
             pipeline, AgentLog.AgentName.CRITIQUE, pipeline.iteration_count,
             user_prompt, output_text, status
@@ -382,16 +376,12 @@ def run_writer(self, pipeline_run_id: str, editor_feedback: str = ""):
     if editor_feedback:
         user_prompt += f"\n\nEditor Feedback:\n{editor_feedback}\n\nPlease review this feedback and produce the final draft."
 
-    system_prompt = (
-        "You are a Content Writer. Write a polished draft satisfying the checklist. "
-        "If you received Editor feedback, finalize the content based on it. "
-        "Output JSON: { \"draft\": str, \"ready_for_review\": bool, \"notes_for_editor\": str }"
-    )
+    system_prompt = "You are a Content Writer. Write a polished draft satisfying the checklist."
 
     try:
-        result = _call_llm_json(system_prompt, user_prompt)
-        output_text = result.get('draft', '')
-        is_ready = result.get('ready_for_review', False)
+        result = _call_agent(system_prompt, user_prompt, WriterOutput)
+        output_text = result['draft']
+        is_ready = result['ready_for_review']
         status = AgentLog.LogStatus.SUCCESS
     except Exception as exc:
         output_text = str(exc)
@@ -399,6 +389,7 @@ def run_writer(self, pipeline_run_id: str, editor_feedback: str = ""):
         status = AgentLog.LogStatus.FAILED
         pipeline.status = PipelineRun.Status.FAILED
         pipeline.save(update_fields=['status'])
+
 
     _log_agent(
         pipeline, AgentLog.AgentName.WRITER, pipeline.iteration_count,
@@ -435,14 +426,10 @@ def run_editor(self, pipeline_run_id: str, notes: str = ""):
         current_draft = writer_log.output_text
 
     user_prompt = f"Current Draft:\n{current_draft}\n\nNotes from Writer:\n{notes}"
-    system_prompt = (
-        "You are a Content Editor. Perform three passes: MODIFY, ADD, DELETE. "
-        "Return the refined text AND your reasoning. "
-        "Output JSON: { \"refined_text\": str, \"editorial_notes\": str }"
-    )
+    system_prompt = "You are a Content Editor. Perform three passes: MODIFY, ADD, DELETE. Return the refined text and notes."
 
     try:
-        result = _call_llm_json(system_prompt, user_prompt)
+        result = _call_agent(system_prompt, user_prompt, EditorOutput)
         output_text = json.dumps(result)
         status = AgentLog.LogStatus.SUCCESS
     except Exception as exc:
@@ -450,6 +437,7 @@ def run_editor(self, pipeline_run_id: str, notes: str = ""):
         status = AgentLog.LogStatus.FAILED
         pipeline.status = PipelineRun.Status.FAILED
         pipeline.save(update_fields=['status'])
+
 
     _log_agent(
         pipeline, AgentLog.AgentName.EDITOR, pipeline.iteration_count,
@@ -504,28 +492,18 @@ def run_reviewer(self, pipeline_run_id: str):
         f"Draft to review:\n{writer_output}\n\n"
         f"Final Critique checklist:\n{merged_critique}"
     )
-    system_prompt = (
-        'You are a Quality Reviewer. Compare the draft against the Final Critique checklist. '
-        'Output ONLY valid JSON: '
-        '{ "decision": "MATCH" | "MISMATCH", "structural_issues": bool, '
-        '"logical_issues": bool, "annotations": str }'
-    )
+    system_prompt = "You are a Quality Reviewer. Compare the draft against the Final Critique checklist."
 
     try:
-        result = _call_llm_json(system_prompt, user_prompt)
+        result = _call_agent(system_prompt, user_prompt, ReviewerOutput)
         output_text = json.dumps(result)
         status = AgentLog.LogStatus.SUCCESS
-    except (json.JSONDecodeError, Exception) as exc:
+    except Exception as exc:
         output_text = str(exc)
         status = AgentLog.LogStatus.FAILED
-        logger.error("Reviewer failed for pipeline %s: %s", pipeline_run_id, exc)
-        _log_agent(
-            pipeline, AgentLog.AgentName.REVIEWER, pipeline.iteration_count,
-            user_prompt, output_text, status
-        )
         pipeline.status = PipelineRun.Status.FAILED
         pipeline.save(update_fields=['status'])
-        return
+
 
     _log_agent(
         pipeline, AgentLog.AgentName.REVIEWER, pipeline.iteration_count,

@@ -1,0 +1,143 @@
+{% extends "orchestration/base.html" %}
+{% block title %}New Pipeline — AgentFlow{% endblock %}
+
+{% block content %}
+<div class="animate-in" style="max-width:700px;margin:0 auto;">
+
+    <!-- Back link -->
+    <a href="{% url 'dashboard' %}"
+        style="display:inline-flex;align-items:center;gap:.4rem;font-size:.85rem;color:var(--text-300);margin-bottom:1.5rem;text-decoration:none;transition:color .2s;">
+        <span>←</span> Dashboard
+    </a>
+
+    <!-- Title -->
+    <div style="margin-bottom:2rem;">
+        <h1
+            style="font-size:1.75rem;font-weight:800;background:linear-gradient(135deg,#f0f4ff,#63b3ed);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-bottom:.4rem;">
+            New Pipeline
+        </h1>
+        <p style="color:var(--text-300);font-size:.9rem;">
+            Describe your task and the 7-agent pipeline will plan, write, edit, and review the output automatically.
+        </p>
+    </div>
+
+    {% if error %}
+    <div class="alert alert-error">{{ error }}</div>
+    {% endif %}
+
+    <!-- Agent overview badges -->
+    <div class="card" style="margin-bottom:1.75rem;padding:1.25rem;">
+        <div
+            style="font-size:.78rem;font-weight:600;color:var(--text-300);letter-spacing:.05em;text-transform:uppercase;margin-bottom:.75rem;">
+            Agent Pipeline
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:.4rem;align-items:center;">
+            <span
+                style="background:var(--bg-700);border:1px solid var(--border);padding:.25rem .65rem;border-radius:100px;font-size:.72rem;font-weight:500;color:var(--text-200);">Orchestrator</span>
+            <span style="color:var(--text-400);font-size:.75rem;">→</span>
+            <span
+                style="background:var(--bg-700);border:1px solid var(--border);padding:.25rem .65rem;border-radius:100px;font-size:.72rem;font-weight:500;color:var(--text-200);">Planner</span>
+            <span style="color:var(--text-400);font-size:.75rem;">→</span>
+            <span
+                style="background:var(--bg-700);border:1px solid var(--border);padding:.25rem .65rem;border-radius:100px;font-size:.72rem;font-weight:500;color:var(--text-200);">Reasoner</span>
+            <span style="color:var(--text-400);font-size:.75rem;">→</span>
+            <span
+                style="background:var(--bg-700);border:1px solid var(--border);padding:.25rem .65rem;border-radius:100px;font-size:.72rem;font-weight:500;color:var(--text-200);">Critique</span>
+            <span style="color:var(--text-400);font-size:.75rem;">→</span>
+            <span
+                style="background:var(--bg-700);border:1px solid var(--border);padding:.25rem .65rem;border-radius:100px;font-size:.72rem;font-weight:500;color:var(--text-200);">Writer</span>
+            <span style="color:var(--text-400);font-size:.75rem;">→</span>
+            <span
+                style="background:var(--bg-700);border:1px solid var(--border);padding:.25rem .65rem;border-radius:100px;font-size:.72rem;font-weight:500;color:var(--text-200);">Editor</span>
+            <span style="color:var(--text-400);font-size:.75rem;">→</span>
+            <span
+                style="background:var(--bg-700);border:1px solid var(--border);padding:.25rem .65rem;border-radius:100px;font-size:.72rem;font-weight:500;color:var(--text-200);">Reviewer</span>
+        </div>
+    </div>
+
+    <!-- Form -->
+    <div class="card">
+        <form method="post" id="pipeline-form">
+            {% csrf_token %}
+
+            <div class="form-group">
+                <label class="form-label" for="id_task">Task Description</label>
+                <textarea class="form-control" id="id_task" name="task_description" rows="6"
+                    placeholder="e.g. Write a comprehensive technical guide to building REST APIs with Django REST Framework, covering authentication, serializers, viewsets, and testing."
+                    required>{{ task_description }}</textarea>
+                <div class="form-hint">Be specific. The more context you provide, the better the agents can collaborate.
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label" for="id_max_iter">Max Iterations</label>
+                <select class="form-control" id="id_max_iter" name="max_iterations" style="cursor:pointer;">
+                    <option value="3">3 iterations</option>
+                    <option value="5">5 iterations</option>
+                    <option value="7" selected>7 iterations</option>
+                    <option value="10">10 iterations</option>
+                </select>
+                <div class="form-hint">
+                    Number of Reviewer → re-plan loops before the pipeline stops. More = higher quality but slower.
+                </div>
+            </div>
+
+            <hr class="divider" />
+
+            <div style="display:flex;justify-content:flex-end;gap:.75rem;">
+                <a href="{% url 'dashboard' %}" class="btn btn-ghost">Cancel</a>
+                <button type="submit" class="btn btn-primary" id="submit-btn">
+                    <span id="btn-text">🚀 Launch Pipeline</span>
+                    <span id="btn-loading" style="display:none;">⟳ Launching…</span>
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- How it works -->
+    <div style="margin-top:2rem;">
+        <div
+            style="font-size:.78rem;font-weight:600;color:var(--text-300);letter-spacing:.05em;text-transform:uppercase;margin-bottom:1rem;">
+            How It Works
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:.75rem;">
+            <div class="card" style="padding:1rem;">
+                <div style="font-size:1.3rem;margin-bottom:.4rem;">🎯</div>
+                <div style="font-size:.82rem;font-weight:600;color:var(--text-100);margin-bottom:.2rem;">Plan</div>
+                <div style="font-size:.75rem;color:var(--text-400);">Orchestrator breaks your task into a plan</div>
+            </div>
+            <div class="card" style="padding:1rem;">
+                <div style="font-size:1.3rem;margin-bottom:.4rem;">🧠</div>
+                <div style="font-size:.82rem;font-weight:600;color:var(--text-100);margin-bottom:.2rem;">Reason</div>
+                <div style="font-size:.75rem;color:var(--text-400);">Reasoner validates logical soundness</div>
+            </div>
+            <div class="card" style="padding:1rem;">
+                <div style="font-size:1.3rem;margin-bottom:.4rem;">📝</div>
+                <div style="font-size:.82rem;font-weight:600;color:var(--text-100);margin-bottom:.2rem;">Write</div>
+                <div style="font-size:.75rem;color:var(--text-400);">Writer drafts polished content</div>
+            </div>
+            <div class="card" style="padding:1rem;">
+                <div style="font-size:1.3rem;margin-bottom:.4rem;">✂️</div>
+                <div style="font-size:.82rem;font-weight:600;color:var(--text-100);margin-bottom:.2rem;">Edit</div>
+                <div style="font-size:.75rem;color:var(--text-400);">Editor applies 3 refinement passes</div>
+            </div>
+            <div class="card" style="padding:1rem;">
+                <div style="font-size:1.3rem;margin-bottom:.4rem;">✅</div>
+                <div style="font-size:.82rem;font-weight:600;color:var(--text-100);margin-bottom:.2rem;">Review</div>
+                <div style="font-size:.75rem;color:var(--text-400);">Reviewer routes to DONE or re-plans</div>
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    document.getElementById('pipeline-form').addEventListener('submit', function () {
+        document.getElementById('btn-text').style.display = 'none';
+        document.getElementById('btn-loading').style.display = 'inline';
+        document.getElementById('submit-btn').disabled = true;
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,559 @@
+{% extends "orchestration/base.html" %}
+{% block title %}Pipeline {{ pipeline.id|stringformat:"s"|truncatechars:9 }} — AgentFlow{% endblock %}
+
+{% block extra_head %}
+<style>
+    /* ── Timeline ─────────────────────────────────────────────── */
+    .timeline {
+        position: relative;
+        padding-left: 28px;
+    }
+
+    .timeline::before {
+        content: '';
+        position: absolute;
+        left: 8px;
+        top: 0;
+        bottom: 0;
+        width: 2px;
+        background: linear-gradient(to bottom, var(--accent-2), transparent);
+        border-radius: 2px;
+    }
+
+    .tl-item {
+        position: relative;
+        margin-bottom: 1.25rem;
+    }
+
+    .tl-dot {
+        position: absolute;
+        left: -24px;
+        top: 16px;
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        border: 2px solid var(--bg-800);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 7px;
+        font-weight: 700;
+        z-index: 1;
+    }
+
+    .tl-dot-SUCCESS {
+        background: var(--accent-3);
+    }
+
+    .tl-dot-FAILED {
+        background: var(--danger);
+    }
+
+    .tl-dot-SKIPPED {
+        background: var(--text-400);
+    }
+
+    /* ── Agent panel ──────────────────────────────────────────── */
+    .agent-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+        gap: .75rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .agent-card {
+        background: var(--bg-700);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        padding: .9rem;
+        transition: border-color .2s;
+    }
+
+    .agent-card.active {
+        border-color: rgba(99, 179, 237, .4);
+    }
+
+    .agent-card.done {
+        border-color: rgba(16, 185, 129, .25);
+    }
+
+    .agent-card.failed {
+        border-color: rgba(239, 68, 68, .25);
+    }
+
+    .agent-name {
+        font-size: .72rem;
+        font-weight: 700;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+        color: var(--text-300);
+        margin-bottom: .3rem;
+    }
+
+    .agent-status {
+        font-size: .8rem;
+        color: var(--text-200);
+    }
+
+    .agent-icon {
+        font-size: 1.4rem;
+        margin-bottom: .4rem;
+    }
+
+    /* ── Raw output panel ────────────────────────────────────── */
+    .output-box {
+        background: var(--bg-900);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        padding: 1.25rem;
+        font-family: var(--mono);
+        font-size: .8rem;
+        line-height: 1.7;
+        color: var(--text-200);
+        white-space: pre-wrap;
+        word-break: break-word;
+        max-height: 420px;
+        overflow-y: auto;
+    }
+
+    /* ── Tabs ─────────────────────────────────────────────────── */
+    .tabs {
+        display: flex;
+        gap: 0;
+        border-bottom: 1px solid var(--border);
+        margin-bottom: 1.5rem;
+    }
+
+    .tab-btn {
+        background: none;
+        border: none;
+        border-bottom: 2px solid transparent;
+        padding: .65rem 1.2rem;
+        color: var(--text-300);
+        font-size: .875rem;
+        font-weight: 500;
+        cursor: pointer;
+        margin-bottom: -1px;
+        transition: color .2s, border-color .2s;
+    }
+
+    .tab-btn:hover {
+        color: var(--text-100);
+    }
+
+    .tab-btn.active {
+        color: var(--accent);
+        border-bottom-color: var(--accent);
+        font-weight: 600;
+    }
+
+    .tab-pane {
+        display: none;
+    }
+
+    .tab-pane.active {
+        display: block;
+    }
+
+    /* ── Progress bar ─────────────────────────────────────────── */
+    .progress-track {
+        height: 4px;
+        background: var(--bg-600);
+        border-radius: 2px;
+        overflow: hidden;
+        margin: .5rem 0;
+    }
+
+    .progress-fill {
+        height: 100%;
+        background: linear-gradient(90deg, var(--accent-2), var(--accent));
+        border-radius: 2px;
+        transition: width .5s ease;
+    }
+
+    /* ── Spinner ──────────────────────────────────────────────── */
+    @keyframes spin {
+        to {
+            transform: rotate(360deg);
+        }
+    }
+
+    .spinner {
+        display: inline-block;
+        width: 14px;
+        height: 14px;
+        border: 2px solid rgba(99, 179, 237, .2);
+        border-top-color: var(--accent);
+        border-radius: 50%;
+        animation: spin .8s linear infinite;
+        vertical-align: middle;
+    }
+
+    /* ── Log row ──────────────────────────────────────────────── */
+    .log-row {
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        background: var(--bg-700);
+        margin-bottom: .5rem;
+        overflow: hidden;
+    }
+
+    .log-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: .7rem 1rem;
+        cursor: pointer;
+        transition: background .2s;
+    }
+
+    .log-header:hover {
+        background: var(--bg-600);
+    }
+
+    .log-body {
+        border-top: 1px solid var(--border);
+        font-size: .78rem;
+        font-family: var(--mono);
+        line-height: 1.65;
+        color: var(--text-200);
+        white-space: pre-wrap;
+        word-break: break-word;
+        padding: 1rem;
+        max-height: 320px;
+        overflow-y: auto;
+        display: none;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="animate-in">
+
+    <!-- Back link -->
+    <a href="{% url 'dashboard' %}"
+        style="display:inline-flex;align-items:center;gap:.4rem;font-size:.85rem;color:var(--text-300);margin-bottom:1.5rem;text-decoration:none;">
+        ← Dashboard
+    </a>
+
+    <!-- Pipeline header -->
+    <div
+        style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:1rem;margin-bottom:2rem;">
+        <div>
+            <div style="display:flex;align-items:center;gap:.75rem;margin-bottom:.5rem;">
+                <span class="badge badge-{{ pipeline.status }}" id="status-badge">{{ pipeline.status }}</span>
+                <span style="font-size:.75rem;color:var(--text-400);font-family:var(--mono);" id="pipeline-id">
+                    {{ pipeline.id }}
+                </span>
+            </div>
+            <h1 style="font-size:1.4rem;font-weight:700;color:var(--text-100);max-width:750px;line-height:1.4;">
+                {{ pipeline.task_description|truncatechars:120 }}
+            </h1>
+            <p style="font-size:.8rem;color:var(--text-400);margin-top:.3rem;">
+                Started {{ pipeline.created_at|timesince }} ago &middot;
+                Iteration <span id="iter-count">{{ pipeline.iteration_count }}</span> / {{ pipeline.max_iterations }}
+            </p>
+        </div>
+        <div>
+            {% if pipeline.status == 'RUNNING' or pipeline.status == 'PENDING' %}
+            <div
+                style="display:flex;align-items:center;gap:.5rem;background:rgba(99,179,237,.07);border:1px solid rgba(99,179,237,.15);padding:.5rem 1rem;border-radius:var(--radius-sm);">
+                <span class="spinner"></span>
+                <span style="font-size:.8rem;color:var(--accent);" id="live-label">Live — polling every 3s</span>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Iteration progress bar -->
+    <div style="margin-bottom:1.75rem;">
+        <div
+            style="display:flex;justify-content:space-between;font-size:.72rem;color:var(--text-400);margin-bottom:.3rem;">
+            <span>Iteration progress</span>
+            <span id="iter-frac">{{ pipeline.iteration_count }}/{{ pipeline.max_iterations }}</span>
+        </div>
+        <div class="progress-track">
+            <div class="progress-fill" id="progress-fill"
+                style="width:{% widthratio pipeline.iteration_count pipeline.max_iterations 100 %}%;"></div>
+        </div>
+    </div>
+
+    <!-- Agent status grid -->
+    <div class="agent-grid" id="agent-grid">
+        {% for agent in agent_names %}
+        {% with latest=pipeline.logs.all|dictsort:"created_at" %}
+        <div class="agent-card" id="agent-{{ agent }}" data-agent="{{ agent }}">
+            <div class="agent-icon">
+                {% if agent == 'ORCHESTRATOR' %}🎯
+                {% elif agent == 'PLANNER' %}📋
+                {% elif agent == 'REASONER' %}🧠
+                {% elif agent == 'CRITIQUE' %}🔍
+                {% elif agent == 'WRITER' %}✍️
+                {% elif agent == 'EDITOR' %}✂️
+                {% elif agent == 'REVIEWER' %}✅
+                {% endif %}
+            </div>
+            <div class="agent-name">{{ agent }}</div>
+            <div class="agent-status text-muted text-sm" id="agent-status-{{ agent }}">—</div>
+        </div>
+        {% endwith %}
+        {% endfor %}
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs">
+        <button class="tab-btn active" onclick="showTab('logs', this)">📋 Agent Logs</button>
+        <button class="tab-btn" onclick="showTab('critique', this)">🔍 Critique</button>
+        <button class="tab-btn" onclick="showTab('output', this)">📄 Final Output</button>
+    </div>
+
+    <!-- Tab: Logs -->
+    <div class="tab-pane active" id="tab-logs">
+        <div id="logs-container">
+            {% for log in logs %}
+            <div class="log-row">
+                <div class="log-header" onclick="toggleLog(this)">
+                    <div style="display:flex;align-items:center;gap:.75rem;">
+                        <span class="badge badge-{{ log.status }}">{{ log.status }}</span>
+                        <span style="font-size:.8rem;font-weight:600;color:var(--text-100);">{{ log.agent_name }}</span>
+                        <span style="font-size:.72rem;color:var(--text-400);">iter {{ log.iteration }}</span>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:.5rem;">
+                        <span style="font-size:.72rem;color:var(--text-400);">{{ log.created_at|timesince }} ago</span>
+                        <span style="color:var(--text-400);font-size:1rem;">›</span>
+                    </div>
+                </div>
+                <div class="log-body">
+                    <strong style="color:var(--text-300);">INPUT:</strong>
+                    {{ log.input_text|truncatechars:800 }}
+
+                    <strong style="color:var(--text-300);">OUTPUT:</strong>
+                    {{ log.output_text|truncatechars:1200 }}
+                </div>
+            </div>
+            {% empty %}
+            <div style="text-align:center;padding:3rem;color:var(--text-400);font-size:.875rem;">
+                <div style="font-size:2rem;margin-bottom:.5rem;">⏳</div>
+                Waiting for agents to start…
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Tab: Critique -->
+    <div class="tab-pane" id="tab-critique">
+        {% if latest_critique %}
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem;">
+            <div class="card">
+                <div
+                    style="font-size:.72rem;font-weight:700;color:var(--accent);letter-spacing:.05em;text-transform:uppercase;margin-bottom:.75rem;">
+                    Planner Critique</div>
+                <div
+                    style="font-size:.8rem;color:var(--text-200);white-space:pre-wrap;line-height:1.7;max-height:260px;overflow-y:auto;">
+                    {{ latest_critique.planner_critique|default:"Pending…" }}</div>
+            </div>
+            <div class="card">
+                <div
+                    style="font-size:.72rem;font-weight:700;color:var(--accent-2);letter-spacing:.05em;text-transform:uppercase;margin-bottom:.75rem;">
+                    Reasoner Critique</div>
+                <div
+                    style="font-size:.8rem;color:var(--text-200);white-space:pre-wrap;line-height:1.7;max-height:260px;overflow-y:auto;">
+                    {{ latest_critique.reasoner_critique|default:"Pending…" }}</div>
+            </div>
+        </div>
+        <div class="card">
+            <div
+                style="font-size:.72rem;font-weight:700;color:var(--accent-3);letter-spacing:.05em;text-transform:uppercase;margin-bottom:.75rem;">
+                ✨ Merged Critique (Final Checklist)</div>
+            <div
+                style="font-size:.85rem;color:var(--text-100);white-space:pre-wrap;line-height:1.75;max-height:320px;overflow-y:auto;">
+                {{ latest_critique.merged_critique|default:"Pending…" }}</div>
+        </div>
+        {% else %}
+        <div style="text-align:center;padding:3rem;color:var(--text-400);">
+            <div style="font-size:2rem;margin-bottom:.5rem;">🔍</div>
+            No critique generated yet.
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Tab: Final Output -->
+    <div class="tab-pane" id="tab-output">
+        {% if pipeline.status == 'DONE' %}
+        <div style="display:flex;justify-content:flex-end;margin-bottom:.75rem;">
+            <button class="btn btn-ghost btn-sm" onclick="copyOutput()">📋 Copy</button>
+        </div>
+        <div class="output-box" id="final-output-box">{{ pipeline.final_output }}</div>
+        {% elif pipeline.status == 'MAX_ITER' %}
+        <div class="alert alert-error">
+            Pipeline reached the maximum iteration limit ({{ pipeline.max_iterations }}). No final output was produced.
+        </div>
+        {% elif pipeline.status == 'FAILED' %}
+        <div class="alert alert-error">
+            Pipeline failed. Check the agent logs for details.
+        </div>
+        {% else %}
+        <div style="text-align:center;padding:3rem;color:var(--text-400);">
+            <div style="font-size:2rem;margin-bottom:.5rem;">⏳</div>
+            Final output will appear here once the pipeline reaches <strong>DONE</strong> status.
+        </div>
+        {% endif %}
+    </div>
+
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    const PIPELINE_ID = "{{ pipeline.id }}";
+    const IS_TERMINAL = {% if pipeline.status == 'DONE' or pipeline.status == 'FAILED' or pipeline.status == 'MAX_ITER' %}true{% else %} false{% endif %};
+
+    const AGENT_ICONS = {
+        ORCHESTRATOR: '🎯', PLANNER: '📋', REASONER: '🧠',
+        CRITIQUE: '🔍', WRITER: '✍️', EDITOR: '✂️', REVIEWER: '✅'
+    };
+
+    /* ── Tab switching ─────────────────────────── */
+    function showTab(tab, btn) {
+        document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        document.getElementById('tab-' + tab).classList.add('active');
+        btn.classList.add('active');
+    }
+
+    /* ── Log accordion ─────────────────────────── */
+    function toggleLog(header) {
+        const body = header.nextElementSibling;
+        const arrow = header.querySelector('span:last-child');
+        const open = body.style.display === 'block';
+        body.style.display = open ? 'none' : 'block';
+        arrow.textContent = open ? '›' : '↓';
+    }
+
+    /* ── Copy output ───────────────────────────── */
+    function copyOutput() {
+        const text = document.getElementById('final-output-box').innerText;
+        navigator.clipboard.writeText(text).then(() => {
+            const btn = event.target;
+            btn.textContent = '✅ Copied!';
+            setTimeout(() => btn.textContent = '📋 Copy', 2000);
+        });
+    }
+
+    /* ── Live polling ──────────────────────────── */
+    function updateBadgeClass(el, status) {
+        el.className = 'badge badge-' + status;
+        el.textContent = status;
+    }
+
+    function updateAgentCard(name, log) {
+        const card = document.getElementById('agent-' + name);
+        const statusEl = document.getElementById('agent-status-' + name);
+        if (!card) return;
+        card.className = 'agent-card';
+        if (!log) { statusEl.textContent = '—'; return; }
+        if (log.status === 'SUCCESS') card.classList.add('done');
+        else if (log.status === 'FAILED') card.classList.add('failed');
+        else card.classList.add('active');
+        statusEl.textContent = log.status + ' · iter ' + log.iteration;
+    }
+
+    function updateLogsHTML(logs) {
+        const container = document.getElementById('logs-container');
+        if (!logs.length) return;
+        container.innerHTML = logs.map(log => `
+    <div class="log-row">
+      <div class="log-header" onclick="toggleLog(this)">
+        <div style="display:flex;align-items:center;gap:.75rem;">
+          <span class="badge badge-${log.status}">${log.status}</span>
+          <span style="font-size:.8rem;font-weight:600;color:var(--text-100);">${log.agent_name}</span>
+          <span style="font-size:.72rem;color:var(--text-400);">iter ${log.iteration}</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:.5rem;">
+          <span style="font-size:.72rem;color:var(--text-400);">just now</span>
+          <span style="color:var(--text-400);font-size:1rem;">›</span>
+        </div>
+      </div>
+      <div class="log-body">
+<strong style="color:var(--text-300);">INPUT:</strong>
+${(log.input_text || '').substring(0, 800)}
+
+<strong style="color:var(--text-300);">OUTPUT:</strong>
+${(log.output_text || '').substring(0, 1200)}</div>
+    </div>`
+        ).join('');
+    }
+
+    async function poll() {
+        try {
+            const [statusRes, logsRes] = await Promise.all([
+                fetch(`/api/pipeline/${PIPELINE_ID}/status/`),
+                fetch(`/api/pipeline/${PIPELINE_ID}/logs/`)
+            ]);
+            const statusData = await statusRes.json();
+            const logsData = await logsRes.json();
+
+            /* Update status badge */
+            const badge = document.getElementById('status-badge');
+            updateBadgeClass(badge, statusData.status);
+
+            /* Update iteration counter + progress bar */
+            document.getElementById('iter-count').textContent = statusData.iteration_count;
+            document.getElementById('iter-frac').textContent =
+                statusData.iteration_count + '/' + statusData.max_iterations;
+            const pct = statusData.max_iterations > 0
+                ? (statusData.iteration_count / statusData.max_iterations * 100)
+                : 0;
+            document.getElementById('progress-fill').style.width = pct + '%';
+
+            /* Update per-agent cards */
+            const latest = statusData.latest_logs || {};
+            Object.keys(AGENT_ICONS).forEach(name => updateAgentCard(name, latest[name] || null));
+
+            /* Update logs list */
+            updateLogsHTML(logsData);
+
+            /* Final output tab */
+            if (statusData.status === 'DONE') {
+                try {
+                    const outRes = await fetch(`/api/pipeline/${PIPELINE_ID}/output/`);
+                    const outData = await outRes.json();
+                    document.getElementById('final-output-box') &&
+                        (document.getElementById('final-output-box').textContent = outData.final_output);
+                } catch (_) { }
+            }
+
+            /* Stop polling if terminal */
+            const terminal = ['DONE', 'FAILED', 'MAX_ITER'];
+            if (terminal.includes(statusData.status)) {
+                document.getElementById('live-label') &&
+                    (document.getElementById('live-label').textContent = 'Pipeline ' + statusData.status);
+                const spinner = document.querySelector('.spinner');
+                if (spinner) spinner.style.display = 'none';
+                return; // stop
+            }
+
+        } catch (e) {
+            console.error('Poll error:', e);
+        }
+        setTimeout(poll, 3000);
+    }
+
+    /* Start polling only if pipeline is not yet terminal */
+    if (!IS_TERMINAL) {
+        setTimeout(poll, 3000);
+    }
+
+    /* Initial agent card state from server-rendered logs */
+    {% for log in logs %}
+    (function () {
+        const card = document.getElementById('agent-{{ log.agent_name }}');
+        const statusEl = document.getElementById('agent-status-{{ log.agent_name }}');
+        if (card) {
+            card.className = 'agent-card {% if log.status == "SUCCESS" %}done{% elif log.status == "FAILED" %}failed{% else %}active{% endif %}';
+            statusEl.textContent = '{{ log.status }} · iter {{ log.iteration }}';
+        }
+    })();
+    {% endfor %}
+</script>
+{% endblock %}
